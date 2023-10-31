@@ -1,0 +1,12 @@
+---
+title: "Prediction of House Prices in Ames, Iowa"
+format: html
+---
+
+```{r}
+
+v <- 2 + 2
+v
+
+
+```

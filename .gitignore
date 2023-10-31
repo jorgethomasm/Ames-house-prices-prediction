@@ -20,6 +20,7 @@
 
 # RStudio files
 .Rproj.user/
+Ames-house-prices-prediction.Rproj
 
 # produced vignettes
 vignettes/*.html
@@ -39,11 +40,10 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# pkgdown site
-docs/
-
 # translation temp files
 po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+/.quarto/
