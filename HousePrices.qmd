@@ -18,12 +18,67 @@ bibliography: HousePrices.bib
 # Template: https://quarto-dev.github.io/quarto-gallery/page-layout/tufte.html
 ---
 
+```{r}
+#| label: setup
+#| message: false
+#| echo: false
+
+library(tidyverse) # ETL and EDA tools
+source("myfunctions.r")
+
+# My personal ggtheme: 
+my_theme <- function() {
+  theme_minimal() + theme(  
+  #legend.position = "none",
+  plot.title = element_text(size = 10 , hjust = 0.5),                  
+  axis.ticks = element_line(),                                      
+  # Y-axis:
+  axis.title.y = element_text(angle = 0, size = 9, vjust = 0.5, face = "bold"),
+  axis.text.y  = element_text(size = 8),                                      
+  # X-axis:
+  axis.title.x = element_text(angle = 0, size = 9, vjust = 0.5, face = "bold"),
+  axis.text.x  = element_text(angle = 0, size = 8)
+  )}
+
+theme_set(my_theme)
+
+```
 
 # Introduction
 
-This document demonstrates the use of a number of advanced page layout features to produce an attractive and usable document inspired by the Tufte handout style and the use of Tufte's styles in RMarkdown documents. The Tufte handout style is a style that Edward Tufte uses in his books and handouts. Tufte's style is known for its extensive use of sidenotes, tight integration of graphics with text, and well-set typography. Quarto[^1] supports most of the layout techniques that are used in the Tufte handout style for both HTML and LaTeX/PDF output.
 
+style is known for its extensive use of sidenotes, tight integration of graphics with text, and well-set typography. Quarto[^1] supports most of the layout techniques that are used in the Tufte handout style for both HTML and LaTeX/PDF output.
 [^1]: To learn more, you can read more about [Quarto](https://www.quarto.org) or visit [Quarto's Github repository](https://www.github.com/quarto-dev/quarto-cli).
+
+# PART I: ETL and EDA
+
+```{r}
+#| label: Load Data
+
+df_all <- read_csv("./data/raw/train.csv") # All labeled data available
+df_sub <- read_csv("./data/raw/test.csv") # Only features for prediction and sumbission
+
+
+```
+
+First things first, let's check for missing values:
+
+```{r}
+#| label: Missing Values
+
+df_all |> count_na() |> View()
+#sapply(df_all$RoofMatl, function(x) sum(is.na(x)))
+
+df_sub |> count_na() |> View()
+
+test <- df_all |> sapply(FUN = function(x) 100*sum(is.na(x))/nrow(df_all)) |> round(2) |> as_tibble() 
+test2<- sapply(df_all, function(x) sum(is.na(x)))
+# typeof(test)
+
+as_tibble(data=test2, rownames_to_column())
+
+```
+
 
 ``` yaml
 ---
