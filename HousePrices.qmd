@@ -1,12 +1,13 @@
 ---
-title: "Prediction of House Prices in Ames, Iowa"
-subtitle: "Advanced Regression and Visual Analytics Techniques" # only for html output
+title: "Prediction of House Prices in Ames"
+subtitle: "My approach to advance regression and Visual Analytics techniques." # only for html output
 author: "Jorge A. Thomas"
 date: "`r Sys.Date()`"
 format:    
     html:
       self-contained: true
       code-fold: true
+      df-print: tibble
       code-summary: "Show the code"
       grid: 
         margin-width: 350px
@@ -24,75 +25,69 @@ bibliography: HousePrices.bib
 #| echo: false
 
 library(tidyverse) # ETL and EDA tools
-source("myfunctions.r")
-
-# My personal ggtheme: 
-my_theme <- function() {
-  theme_minimal() + theme(  
-  #legend.position = "none",
-  plot.title = element_text(size = 10 , hjust = 0.5),                  
-  axis.ticks = element_line(),                                      
-  # Y-axis:
-  axis.title.y = element_text(angle = 0, size = 9, vjust = 0.5, face = "bold"),
-  axis.text.y  = element_text(size = 8),                                      
-  # X-axis:
-  axis.title.x = element_text(angle = 0, size = 9, vjust = 0.5, face = "bold"),
-  axis.text.x  = element_text(angle = 0, size = 8)
-  )}
-
-theme_set(my_theme)
-
+source("./tools/myfunctions.r")
+theme_set(jalsggtheme)
 ```
 
+::: {#fig-intro layout-ncol=2}
+
+![Houses](./imgs/ames_gai_16x9.jpeg){width=100%}
+
+![Geographical Location](./imgs/Ames_map.png){width=100%}
+
+Ames, Iowa (USA)
+:::
 # Introduction
 
-
-style is known for its extensive use of sidenotes, tight integration of graphics with text, and well-set typography. Quarto[^1] supports most of the layout techniques that are used in the Tufte handout style for both HTML and LaTeX/PDF output.
-[^1]: To learn more, you can read more about [Quarto](https://www.quarto.org) or visit [Quarto's Github repository](https://www.github.com/quarto-dev/quarto-cli).
+In this classic [Kaggle](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques) project you will see my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics.
 
 # PART I: ETL and EDA
 
 ```{r}
 #| label: Load Data
+#| warning: false
 
 df_all <- read_csv("./data/raw/train.csv") # All labeled data available
 df_sub <- read_csv("./data/raw/test.csv") # Only features for prediction and sumbission
-
-
 ```
 
-First things first, let's check for missing values:
+## Missing Values
+
+My **first step** is always to check the completeness of data. Therefore, let's check for missing values[^1]. It is a recurrent first step in EDA. For this case I wrote the function *count_na()* that generates the following table:
+
+[^1]: I encourage you to **write your own function to quantify missing values** depending on the programming language and labelling system used. 
 
 ```{r}
 #| label: Missing Values
+#| tbl-cap: Training Data
 
-df_all |> count_na() |> View()
-#sapply(df_all$RoofMatl, function(x) sum(is.na(x)))
-
-df_sub |> count_na() |> View()
-
-test <- df_all |> sapply(FUN = function(x) 100*sum(is.na(x))/nrow(df_all)) |> round(2) |> as_tibble() 
-test2<- sapply(df_all, function(x) sum(is.na(x)))
-# typeof(test)
-
-as_tibble(data=test2, rownames_to_column())
+df_all |> count_na()
 
 ```
 
 
-``` yaml
----
-title: "An Example Using the Tufte Style"
-author: "John Smith"
-format:
-  html:
-    grid:
-      margin-width: 350px         # <1>
-  pdf: default
-reference-location: margin        # <2>
-citation-location: margin         # <2>
----
+Before jumping to any conclusion about the percentage of missing values, read thoroughly the data manifest *data_description.txt* available here:
+
+[https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data)
+
+There you'll see that for some columns, missing data (NA) means really *"None"*, i.e.,  the 
+absence of the determined feature in the house is a category exposing the lack of such quality that can have a 
+significant impact on the response variable Sale Price.
+
+
+```{r}
+#| label: easy replace_na
+
+column_none <- c("Alley", 
+                 "BsmtQual", "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinType2", 
+                 "FireplaceQu", 
+                 "GarageType", "GarageFinish", "GarageQual", "GarageCond", 
+                 "PoolQC",
+                 "Fence", 
+                 "MiscFeature")
 ```
+
+
 
 1.  Increases the width of the margin to make more room for sidenotes and margin figures (HTML only).
 2.  Places footnotes and cited sources in the margin. Other layout options (for example placing a figure in the margin) will be set per element in examples below.

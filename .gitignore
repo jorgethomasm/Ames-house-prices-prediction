@@ -49,5 +49,6 @@ rsconnect/
 
 /.quarto/
 
-# Data folders
+# User specific folders
 data/
+imgs/
