@@ -1,6 +1,6 @@
 ---
 title: "Prediction of House Prices in Ames"
-subtitle: "My approach to advance regression and Visual Analytics techniques." # only for html output
+subtitle: "My approach to advance regression and visual analytics techniques." # only for html output
 author: "Jorge A. Thomas"
 date: "`r Sys.Date()`"
 format:    
@@ -28,64 +28,99 @@ library(tidyverse) # ETL and EDA tools
 source("./tools/myfunctions.r")
 theme_set(jalsggtheme)
 ```
-
 ::: {#fig-intro layout-ncol=2}
 
 ![Houses](./imgs/ames_gai_16x9.jpeg){width=100%}
 
-![Geographical Location](./imgs/Ames_map.png){width=100%}
+![Location](./imgs/Ames_map.png){width=100%}
 
 Ames, Iowa (USA)
 :::
 # Introduction
 
-In this classic [Kaggle](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques) project you will see my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics.
+In this classic [Kaggle project](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques) you will see my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics. I'll be feeding some tips along the analysis.
 
-# PART I: ETL and EDA
+The Ames House dataset was prepared by Dean De Cock to improve on the older classic Boston Houses dataset. It comprises two files:
+
+1. One file contains everything, i.e., features and labels (predictors and response). This is the *training, validation and testing dataset*. I will have to split properly the *Data Budget*.
+
+2. Another file only with features (predictors) to make predictions. This is the *submission dataset*.
+
+This is because the project is actually an open competition to see who makes the best predictions, i.e. for this case minimum RMSE.
+
+I will keep updating this notebook, making improvements and reporting my ranked obtained with my submitted results.
+
+# PHASE I: ETL and EDA
+
+## Extract Data
+
+Make your query or read local files and then, of course, take a look at them.
 
 ```{r}
 #| label: Load Data
 #| warning: false
 
-df_all <- read_csv("./data/raw/train.csv") # All labeled data available
-df_sub <- read_csv("./data/raw/test.csv") # Only features for prediction and sumbission
+df_all <- read_csv("./data/raw/train.csv") # Train, validate and test dataset
+df_sub <- read_csv("./data/raw/test.csv")  # Submission dataset
+print("Data Budget")
+dim(df_all)
+print("Submission dataset of features")
+dim(df_sub) 
 ```
+
+In order to organise my **Data Budget** I count on 1460 Observations of 80 predictors and the Response, which is the Sale Price of the houses. 
 
 ## Missing Values
 
-My **first step** is always to check the completeness of data. Therefore, let's check for missing values[^1]. It is a recurrent first step in EDA. For this case I wrote the function *count_na()* that generates the following table:
+First things first, read the full data description[^1] (manifest) available [here](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data). There you'll find that for several columns missing values, here `NA`, means actually *"None"*. The absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the Sale Price (response).
 
-[^1]: I encourage you to **write your own function to quantify missing values** depending on the programming language and labelling system used. 
+Therefore, I will fill the empty fields (NA) of the indicated columns of both datasets with the string *"None"*.
 
-```{r}
-#| label: Missing Values
-#| tbl-cap: Training Data
-
-df_all |> count_na()
-
-```
-
-
-Before jumping to any conclusion about the percentage of missing values, read thoroughly the data manifest *data_description.txt* available here:
-
-[https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data)
-
-There you'll see that for some columns, missing data (NA) means really *"None"*, i.e.,  the 
-absence of the determined feature in the house is a category exposing the lack of such quality that can have a 
-significant impact on the response variable Sale Price.
-
+[^1]: Tip: **print a copy**, make notes and study it. This is the first step to get into domain knowledge for *Feature Engineering* in the modelling phase.
 
 ```{r}
 #| label: easy replace_na
 
-column_none <- c("Alley", 
-                 "BsmtQual", "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinType2", 
-                 "FireplaceQu", 
-                 "GarageType", "GarageFinish", "GarageQual", "GarageCond", 
-                 "PoolQC",
-                 "Fence", 
-                 "MiscFeature")
+cols_NA_to_none <- list(
+  Alley = "None",
+  BsmtQual = "None", BsmtCond = "None", BsmtExposure = "None", BsmtFinType1 = "None", BsmtFinType2 = "None", 
+  FireplaceQu = "None", 
+  GarageType = "None", GarageFinish = "None", GarageQual = "None", GarageCond = "None", 
+  PoolQC = "None",
+  Fence = "None", 
+  MiscFeature = "None")
+
+df_all <- df_all |>
+  replace_na(cols_NA_to_none) 
+  
+df_sub <- df_sub |>
+  replace_na(cols_NA_to_none)
 ```
+
+One of the early and recurrent steps of the EDA is to check the **completeness of data**. Therefore, let's check now, after filling some indicated fields, for missing values[^2]. For this case I wrote the function *count_na()* that generates the following tables:
+
+[^2]: Tip: **write a function to quantify missing values** depending on the language and labelling system used. 
+
+```{r}
+#| label: All Missing Values
+#| column: margin
+#| tbl-cap: All Data
+df_all |> 
+  count_na() |>
+  knitr::kable()
+```
+
+
+
+```{r}
+#| label: Submission Features
+#| column: margin
+#| tbl-cap: Submission Data
+df_sub |> 
+  count_na() |>
+  knitr::kable()
+```
+
 
 
 
@@ -95,9 +130,9 @@ column_none <- c("Alley",
 These layout features are designed with two important goals in mind:
 
 1.  To produce both PDF and HTML output with similar styles from the same Quarto document;
-2.  To provide simple syntax to write elements of the Tufte style such as side notes and margin figures. If you'd like a figure placed in the margin, just set the option `fig-column: margin` for your code chunk, and we will take care of the details for you[^2].
+2.  To provide simple syntax to write elements of the Tufte style such as side notes and margin figures. If you'd like a figure placed in the margin, just set the option `fig-column: margin` for your code chunk, and we will take care of the details for you.
 
-[^2]: You never need to think about `\begin{marginfigure}` or `<span class="marginfigure">`; the LaTeX and HTML code under the hood may be complicated, but you never need to learn or write such code.
+
 
 If you have any feature requests or find bugs in these capabilities, please do not hesitate to file them to <https://github.com/quarto-dev/quarto-cli/issues>.
 
