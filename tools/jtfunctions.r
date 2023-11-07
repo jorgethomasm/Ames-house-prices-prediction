@@ -1,4 +1,23 @@
-# JT's functions:
+# JT's functins:
+
+jtggtheme <- theme_minimal() +
+  theme(
+        plot.title = element_text(size = 10,
+                                  hjust = 0.5),
+        axis.ticks = element_line(),
+        # Y-axis:
+        axis.title.y = element_text(angle = 0,
+                                    size = 9,
+                                    vjust = 0.5,
+                                    face = "bold"),
+        axis.text.y  = element_text(size = 8),
+        # X-axis:
+        axis.title.x = element_text(angle = 0,
+                                    size = 9,
+                                    vjust = 0.5,
+                                    face = "bold"),
+        axis.text.x  = element_text(angle = 0,
+                                    size = 8))
 
 count_na <- function(df) {
   n_rows <- nrow(df)
@@ -28,25 +47,6 @@ replace_na_with_median <- function(x) {
   ifelse(is.na(x), median(x, na.rm = TRUE), x)
 }
 
-jtggtheme <- theme_minimal() +
-  theme(
-        plot.title = element_text(size = 10,
-                                  hjust = 0.5),
-        axis.ticks = element_line(),
-        # Y-axis:
-        axis.title.y = element_text(angle = 0,
-                                    size = 9,
-                                    vjust = 0.5,
-                                    face = "bold"),
-        axis.text.y  = element_text(size = 8),
-        # X-axis:
-        axis.title.x = element_text(angle = 0,
-                                    size = 9,
-                                    vjust = 0.5,
-                                    face = "bold"),
-        axis.text.x  = element_text(angle = 0,
-                                    size = 8))
-
 inv_boxcox <- function(x, lambda) {
   if (lambda == 0) {
     exp(x)
@@ -54,3 +54,15 @@ inv_boxcox <- function(x, lambda) {
     (lambda * x + 1)^(1 / lambda)
   }
 }
+
+find_mode <- function(x) {
+  unique_values <- unique(x)
+  tab <- tabulate(match(x, unique_values))
+  unique_values[tab == max(tab)]
+}
+
+# get mode function
+# df_all |>
+#   count(MasVnrType, name = "Count", sort = TRUE) |>
+#   filter(Count == max(Count, na.rm = TRUE)) |>
+#   pull(MasVnrType)

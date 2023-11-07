@@ -48,7 +48,7 @@ The Ames House dataset was prepared by Dean De Cock to improve on the older clas
 
 2. Another file only with features (predictors) to make predictions. This is the *submission dataset*.
 
-This is because the project is actually an open competition to see who makes the best predictions, i.e. for this case minimum RMSE.
+This is because the project is actually an open competition to see who makes the best predictions. That means for this case getting minimum RMSE.
 
 I will keep updating this notebook, making improvements and reporting my ranked obtained with my submitted results.
 
@@ -99,7 +99,7 @@ df_sub <- df_sub |>
   replace_na(cols_NA_to_none)
 ```
 
-One of the early and recurrent steps of the EDA is to check the **completeness of data**. Therefore, let's check now, after filling some indicated fields, for missing values[^2]. For this case I wrote the function *count_na()* that generates the following tables:
+One of the early and recurrent steps of the EDA is to check the **completeness of data**. Let's search for missing values, after filling indicated fields[^2]. For this case I wrote the function *count_na()* that generates the following tables:
 
 [^2]: Tip: **write a function to quantify missing values** depending on the language and labelling system used. 
 
@@ -127,9 +127,9 @@ I will fill the remaining missing values as follow:
 
 - The `LotFrontage` column refers to the linear feet of street connected to the house. This feature is not well documented and the missing percentage related to other variables makes it unreliable, therefore, I will delete the feature.
 
-- Everytime there is no garage, i.e., `GarageType = "None"`, there is the corresponding missing value in Garage Year Built `GarageYrBlt = NA`. I will **engineer a new feature** called `GarageNew` with three ordinal categories: None, No, Yes. This based on the delta of `YearBuilt - GarageYrBlt`. Then I will remove the `GarageYrBlt` predictor.
+- Everytime there is no garage, i.e., `GarageType = "None"`, there is the corresponding missing value in Garage Year Built `GarageYrBlt = NA`. I will **engineer a new feature** called `GarageNew` with three ordinal categories: None, No, Yes. This based on the delta of `YearBuilt - GarageYrBlt`; I expect that given the house price, the algorithm will learn that "None" is worse than "No" and so on. Then I will remove the `GarageYrBlt` predictor.
 
-- For the rest of variables with a 1 % or less of missing values proportion, I'll calculate the median (if numerical) and the mode (if categorical) in order to fill them.
+- For the rest of variables with a 1 % or less of missing values proportion, I'll calculate the **median** (if numerical) and the **mode** (if categorical) in order to fill them.
 
 Here's my pipeline for both datasets:
 
@@ -146,8 +146,6 @@ df_all <- df_all |>
   mutate(GarageYrBlt = NULL) |>
   mutate_if(is.numeric, replace_na_with_median)
 
-# TODO: Add line with mode for strings....
-
 df_sub <- df_sub |>
   mutate(LotFrontage = NULL) |>
   mutate(GarageNew = if_else(YearBuilt - GarageYrBlt > 0, "Yes", "No")) |>
@@ -155,12 +153,61 @@ df_sub <- df_sub |>
   mutate(GarageNew = factor(GarageNew, levels = c("None", "No", "Yes"))) |>
   mutate(GarageYrBlt = NULL) |>
   mutate_if(is.numeric, replace_na_with_median)
-
-# df_sub |> count_na() |> View()
 ```
 
+Let's get a list with the mode of each remaining columns containing missing values `NA`.
 
-# Figures
+```{r }
+#| label: Mode for NAs
+
+# Get the mode for reamaining columns with NAs:
+
+# Good and old-fashion code: apply(df_all, 2, find_mode)
+
+ls_na_mode_all <- df_all |>
+  select(MasVnrType, MasVnrArea, Electrical) |>
+  map(find_mode)
+
+ls_na_mode_sub <- df_sub |> 
+  select(MasVnrType, MasVnrArea, MSZoning, Utilities,	BsmtFullBath,	BsmtHalfBath,	Functional,	Exterior1st,	Exterior2nd,	BsmtFinSF1,	BsmtFinSF2,	BsmtUnfSF,	TotalBsmtSF,	KitchenQual,	GarageCars,	GarageArea,	SaleType) |>
+  map(find_mode)
+
+# Replace with the created named-lists
+df_all <- df_all |>
+  replace_na(ls_na_mode_all) 
+  
+df_sub <- df_sub |>
+  replace_na(ls_na_mode_sub)
+
+# Check for last time for missing values:
+df_all |>
+  count_na()
+
+df_sub |>
+  count_na()
+```
+
+**"The data is complete!"** Let's think about predictors.
+
+## Feature Engineering
+
+In this part I will establish which variables are categorical and numerical; this is not always as obvious as it seems.[^3]
+
+[^3]: Tip: integers as Years can be treated as categories for the analysis.
+
+```{r}
+#| label: Feat. Engineering
+
+
+
+
+```
+
+# Transforming data
+
+Logarithmic transformations work when there are few large values, like in this case, there are only a few of expensive hauses. The logarithm scale will shrink that right tail.
+
+
 
 ## Margin Figures
 
