@@ -21,25 +21,25 @@ jtggtheme <- theme_minimal() +
 
 count_na <- function(df) {
   n_rows <- nrow(df)
-  df_na <- sapply(df, function(x) sum(is.na(x))) # "colSums(is.na(df))"
+  df_na <- sapply(df, function(x) sum(is.na(x))) # or colSums(is.na(df))
   if (any(df_na > 0)) {
     if ("tidyverse" %in% .packages()) {
       df_na |>
         tibble::as_tibble(rownames = c("Variable")) |>
-        dplyr::rename(Count = value) |>
-        dplyr::filter(Count > 0) |>
-        dplyr::mutate(Percentage = round(100 * Count / n_rows, 2)) |>
-        dplyr::arrange(dplyr::desc(Percentage))
+        dplyr::rename(NA_count = value) |>
+        dplyr::filter(NA_count > 0) |>
+        dplyr::mutate(Percent = round(100 * NA_count / n_rows, 2)) |>
+        dplyr::arrange(dplyr::desc(Percent))
     } else {
-      df_na <- data.frame(Variable = names(df_na), Count = df_na)
-      df_na <- subset(df_na, df_na$Count > 0)
-      df_na$Percentage <- round(100 * df_na$Count / n_rows, 2)
-      df_na <- df_na[order(df_na$Count, decreasing = TRUE)]
+      df_na <- data.frame(Variable = names(df_na), NA_count = df_na)
+      df_na <- subset(df_na, df_na$NA_count > 0)
+      df_na$Percent <- round(100 * df_na$NA_count / n_rows, 2)
+      df_na <- df_na[order(df_na$NA_count, decreasing = TRUE)]
       rownames(df_na) <- NULL
       df_na
     }
   } else {
-    print("No missing (NA) values found.")
+    print("No missing values (NA) found.")
   }
 }
 
