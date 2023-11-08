@@ -213,15 +213,13 @@ The first easy thing to do that comes to mind is to add the Total Area of the pr
 ```{r}
 #| label: Feature Engineering
 
-df_all |>
+df_all <- df_all |>
   mutate(TotalAreaSF = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`)
 
-df_sub |>
+df_sub <- df_sub |>
   mutate(TotalAreaSF = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`)
 
 ```
-
-
 
 # Correlograms:
 
