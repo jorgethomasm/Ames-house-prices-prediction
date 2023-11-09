@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Jorge A. Thomas">
-<meta name="dcterms.date" content="2023-11-08">
+<meta name="dcterms.date" content="2023-11-09">
 
 <title>Prediction of House Prices in Ames</title>
 <style>
@@ -4632,7 +4632,7 @@ return!"\t\n\x0B\f\r                　\u2028\u2029
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 8, 2023</p>
+      <p class="date">November 9, 2023</p>
     </div>
   </div>
   
@@ -4674,10 +4674,10 @@ return!"\t\n\x0B\f\r                　\u2028\u2029
 <li><p>Another file contains only features (predictors) to make predictions. Here this is the <em>submission dataset</em>.</p></li>
 </ol>
 <p>This is because the project is actually an open competition to see who makes the best predictions. That means for this case getting the minimum RMSE possible.</p>
-<p>I will keep updating this notebook, making improvements and reporting my ranked obtained with my submitted results.</p>
+<p>I will keep updating this notebook, making improvements and reporting the rank obtained with my submitted results.</p>
 </section>
-<section id="phase-i-etl-and-eda" class="level1 page-columns page-full">
-<h1>PHASE I: ETL and EDA</h1>
+<section id="phase-i-etl-eda" class="level1 page-columns page-full">
+<h1>PHASE I: ETL / EDA</h1>
 <section id="extract-data" class="level2">
 <h2 class="anchored" data-anchor-id="extract-data">Extract Data</h2>
 <p>Make your query or read local files and then, of course, take a look at them.</p>
@@ -5072,10 +5072,19 @@ return!"\t\n\x0B\f\r                　\u2028\u2029
 </section>
 <section id="data-transformations" class="level1 page-columns page-full">
 <h1>Data Transformations</h1>
-<div class="page-columns page-full"><p>The moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a>.</p><div class="no-row-height column-margin column-container"><li id="fn4"><p><sup>4</sup> Tip: think of a <strong>Logarithmic transformation</strong> like pressing an <strong>accordeon</strong> only from your right arm.</p></li></div></div>
+<div class="page-columns page-full"><p>The moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a>.</p><div class="no-row-height column-margin column-container"><li id="fn4"><p><sup>4</sup> Tip: Forget about lineaerity and interpretability if you want the most accurate results.</p></li></div></div>
 <p>If understanding and interpretability is your first goal, then start with a parametric linear model.</p>
 <p>In my experience, processes that have to do with <em>money</em>, e.g., sale prices, costs of products, salaries, they are most of the time Log-Normal. Rarely is something free, so you don’t have zeros; think about the top 1% of reach people, or anything that becomes exotic or <strong>premium</strong> the higher the ammount of money is involved. These are long and sparsed tails.</p>
 <div class="page-columns page-full"><p>Logarithmic transformations work when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>, making the distribution of the values more normal-like.</p><div class="no-row-height column-margin column-container"><li id="fn5"><p><sup>5</sup> Tip: think of a <strong>Logarithmic transformation</strong> like pressing an <strong>accordeon</strong> only from your right arm.</p></li></div></div>
+</section>
+<section id="phase-2-modelling" class="level1 page-columns page-full">
+<h1>PHASE 2: MODELLING</h1>
+<section id="reference-model" class="level2">
+<h2 class="anchored" data-anchor-id="reference-model">Reference Model</h2>
+</section>
+<section id="model-selection" class="level2">
+<h2 class="anchored" data-anchor-id="model-selection">Model Selection</h2>
+</section>
 <section id="margin-figures" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="margin-figures">Margin Figures</h2>
 <p>Images and graphics play an integral role in Tufte’s work. To place figures in the margin you can use the <strong>Quarto</strong> chunk option <code>column: margin</code>. For example:</p>

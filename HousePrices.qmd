@@ -50,9 +50,9 @@ The Ames House dataset was prepared to improve on the older classic Boston House
 
 This is because the project is actually an open competition to see who makes the best predictions. That means for this case getting the minimum RMSE possible.
 
-I will keep updating this notebook, making improvements and reporting my ranked obtained with my submitted results.
+I will keep updating this notebook, making improvements and reporting the rank obtained with my submitted results.
 
-# PHASE I: ETL and EDA
+# PHASE I: ETL / EDA
 
 ## Extract Data
 
@@ -115,8 +115,6 @@ df_sub <- df_sub |>
 One of the early and recurrent steps of the EDA is to check the **completeness of data**. Let's search for missing values, after filling indicated fields[^2]. For this case I wrote the function `count_na()` that generates the tables displayed on the right margin.
 
 [^2]: Tip: **write a function to quantify missing values** depending on the language and labelling system used. 
-
-
 
 ```{r}
 #| label: Counting NAs
@@ -253,15 +251,21 @@ df_all |>
 
 The moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best[^4]. 
 
-[^4]: Tip: Forget about interpretability if you want the most accurate results.  
+[^4]: Tip: Forget about lineaerity and interpretability if you want the most accurate results.  
 
 If understanding and interpretability is your first goal, then start with a parametric linear model.
 
 In my experience, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time Log-Normal. Rarely is something free, so you don't have zeros; think about the top 1% of reach people, or anything that becomes exotic or **premium** the higher the ammount of money is involved. These are long and sparsed tails.
 
-Logarithmic transformations work when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^4], making the distribution of the values more normal-like.
+Logarithmic transformations work when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^5], making the distribution of the values more normal-like.
 
-[^4]: Tip: think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
+[^5]: Tip: think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
+
+# PHASE 2: MODELLING
+
+## Reference Model
+
+## Model Selection
 
 ## Margin Figures
 
