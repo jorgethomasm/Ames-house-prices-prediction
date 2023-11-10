@@ -1,6 +1,6 @@
 ---
 title: "Prediction of House Prices in Ames"
-subtitle: "My approach to advance regression and visual analytics techniques." # only for html output
+subtitle: "My approach to advance regression with visual analytics techniques." # only for html output
 author: "Jorge A. Thomas"
 date: "`r Sys.Date()`"
 format:    
@@ -40,58 +40,67 @@ Ames, Iowa - USA.
 
 # Introduction
 
-In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] you will see my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics. I'll be feeding some tips along the analysis.
+In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] you'll follow my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics. I'll be feeding some tips along the analysis.
 
-The Ames House dataset was prepared to improve on the older classic Boston Houses dataset and it comprises two files:
+The Ames House dataset was prepared to improve on the older classic Boston Houses dataset and, given its open competition nature, it comprises two files:
 
-1. One file contains features and labels (predictors and response). Here this is the *training dataset*. I will have to split properly the *Data Budget* in order to fit the best model with this dataset.
+1. One file contains features and labels (predictors and response). Here this is the *training dataset*. It's all I have to split the *Data Budget*.
 
-2. Another file contains only features (predictors) to make predictions. Here this is the *submission dataset*.
+2. Another file contains only features (predictors) to make predictions for the final submissions. Here this is the *submission dataset*.
 
-This is because the project is actually an open competition to see who makes the best predictions. That means for this case getting the minimum RMSE possible.
+The goal of the competition is to achieve minimum RMSE.
 
-I will keep updating this notebook, making improvements and reporting the rank obtained with my submitted results.
+I will keep updating this notebook, making improvements and reporting the rank obtained with my submitted predictions.
 
 # PHASE I: ETL / EDA
 
 ## Extract Data
 
-Make your query or read local files and then, of course, take a look at them.
+I checked beforehands that there are no missing values, here `NA`, in the target variable `SalePrice`. 
+Therefore, I will write a pipeline to read and concatenate both datasets, adding and extra column `dataset` to label as "train" and "test" for further easy splitting[^1] (subset or filter).
+
+[^1]: Tip: The whole Feature Transformation pipeline most be always the same for all, old and new predictors.
 
 ```{r}
 #| label: Load Data
 #| warning: false
 
-df_all <- read_csv("./data/raw/train.csv") # Train, validate and test dataset
-df_sub <- read_csv("./data/raw/test.csv")  # Submission dataset
-print("Training dataset")
-dim(df_all)
-print("Submission dataset (it contains only features)")
-dim(df_sub) 
+ames_train_raw <- read_csv("./data/raw/train.csv") # Train, validattion and test dataset
+print("Dimensions of training dataset")
+dim(ames_train_raw)
+
+ames_test_raw <- read_csv("./data/raw/test.csv")  # Features for submission dataset
+print("Dimensions of test dataset containing only Feats.")
+dim(ames_test_raw) 
+
+# Add Target column with NA so both DFs can be concatenated:.id
+ames_test_raw <- ames_test_raw |> mutate(SalePrice = NA)
+
+# Binding and adding identifier column "dataset" 
+ames_all <- bind_rows(list(train = ames_train_raw, test = ames_test_raw), .id = "dataset")
 
 print("Available variables:")
-names(df_all)
+names(ames_all)
 ```
 
-In order to organise my **Data Budget** I count on 1460 Observations of 79 predictors (one column is only an `Id` per house) and the Response, which is the `SalePrice` of the houses at the end of the list above.
+[comment]: <> In order to organise my **Data Budget** I count on 1460 Observations of 79 predictors (one column is only an `Id` per house) and the Response, which is the `SalePrice` of the houses at the end of the list above.
 
-Take into account that the number of features for modelling will vary. Some will be discarded and some will be created along the analysis.
+Note that `Id` and the just added `dataset` columns are not predictors. Hence, there are **79 features** to play  with. Also rememeber that the number of features for modelling will vary. Some will be discarded and some will be created along the analysis.
 
+I'll get rid of the `Id` column:
 ```{r}
 #| label: Remove Id
 
-df_all <- df_all |> mutate(Id = NULL)
-df_sub <- df_sub |> mutate(Id = NULL)
-
+ames_all$Id <- NULL
 ```
 
 ## Impute Missing Values
 
-First things first, read the full data description[^1]. The manifest is available [here](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data). There you'll find that for several columns missing values `NA` means actually *"None"*. The physical absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the Sale Price (response).
+First things first, read the full data description[^2]. The manifest is available [here](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data). There you'll find that for several columns missing values `NA` means actually *"None"*. The physical absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the response `SalePrice`.
 
 Therefore, I will fill the empty `NA` fields of the indicated columns of both datasets with the string *"None"*.
 
-[^1]: Tip: **print a copy**, make notes and study it. This is the first step to get into domain knowledge for *Feature Engineering* in the modelling phase.
+[^2]: Tip: **print a copy**, make notes and study it. This is the first step to get into domain knowledge for *Feature Engineering* in the modelling phase.
 
 ```{r}
 #| label: easy replace_na
@@ -105,29 +114,25 @@ cols_NA_to_none <- list(
   Fence = "None", 
   MiscFeature = "None")
 
-df_all <- df_all |>
-  replace_na(cols_NA_to_none) 
-  
-df_sub <- df_sub |>
-  replace_na(cols_NA_to_none)
+ames_all <- ames_all |>
+  replace_na(cols_NA_to_none)   
 ```
 
-One of the early and recurrent steps of the EDA is to check the **completeness of data**. Let's search for missing values, after filling indicated fields[^2]. For this case I wrote the function `count_na()` that generates the tables displayed on the right margin.
+One of the early and recurrent steps of the EDA is to check the **completeness of data**. Let's search for missing values, after filling indicated fields[^3]. 
+For this case I wrote the function `count_na()` that generates the table displayed on the right margin.
 
-[^2]: Tip: **write a function to quantify missing values** depending on the language and labelling system used. 
+[^3]: Tip: **write a function to quantify missing values** depending on the language and labelling system used. 
 
 ```{r}
 #| label: Counting NAs
 #| code-fold: false
 #| column: margin
 
-df_all |> 
+# Remaining NA count leaving out target SalePrice
+ames_all |> 
+  select(-SalePrice) |>
   count_na() |>  
-  knitr::kable(caption = 'Training dataset')
-
-df_sub |> 
-  count_na() |>  
-  knitr::kable(caption = 'Submission dataset')  
+  knitr::kable(caption = 'Ames dataset')
 ```
 
 I will fill the remaining missing values as follow:
@@ -138,27 +143,19 @@ I will fill the remaining missing values as follow:
 
 - For the rest of variables with a 1 % or less `NA`, I'll calculate the **median** (if numerical) and the **mode** (if categorical) in order to fill them with it.
 
-Here's my pipeline for both datasets:
+Here's my pipeline for the whole dataset:
 
 ```{r}
 #| label: terminating NAs
 
 # "replace_na_with_median" is a custom function
 
-df_all <- df_all |>
-  mutate(LotFrontage = NULL) |>
-  mutate(GarageNew = if_else(YearBuilt - GarageYrBlt > 0, "Yes", "No")) |>
+ames_all <- ames_all |>
+  mutate(LotFrontage = NULL) |> # Removing LotFrontage
+  mutate(GarageNew = if_else(YearBuilt - GarageYrBlt > 0, "Yes", "No")) |> # New Feat.
   replace_na(list(GarageNew = "None")) |>
-  mutate(GarageNew = factor(GarageNew, levels = c("None", "No", "Yes"))) |>
-  mutate(GarageYrBlt = NULL) |>
-  mutate_if(is.numeric, replace_na_with_median)
-
-df_sub <- df_sub |>
-  mutate(LotFrontage = NULL) |>
-  mutate(GarageNew = if_else(YearBuilt - GarageYrBlt > 0, "Yes", "No")) |>
-  replace_na(list(GarageNew = "None")) |>
-  mutate(GarageNew = factor(GarageNew, levels = c("None", "No", "Yes"))) |>
-  mutate(GarageYrBlt = NULL) |>
+  mutate(GarageNew = factor(GarageNew, levels = c("None", "No", "Yes"))) |> # 3 levels
+  mutate(GarageYrBlt = NULL) |> # Removing old Feat.
   mutate_if(is.numeric, replace_na_with_median)
 ```
 
@@ -168,31 +165,24 @@ Let's get a list with the mode of each remaining columns containing missing valu
 #| label: Mode for NAs
 
 # Get the mode for reamaining columns with NAs:
+# "find_mode()" is a custom function.
 
-# Good and old-fashion code: apply(df_all, 2, find_mode)
+# Good, old-fashioned code: apply(ames_all, 2, find_mode)
 
-ls_na_mode_all <- df_all |>
-  select(MasVnrType, MasVnrArea, Electrical) |>
+list_na_mode <- ames_all |> 
+  select(MasVnrType, MasVnrArea, MSZoning, Electrical, Utilities,	BsmtFullBath,	BsmtHalfBath,	Functional,	Exterior1st,	Exterior2nd,	BsmtFinSF1,	BsmtFinSF2,	BsmtUnfSF,	TotalBsmtSF,	KitchenQual,GarageCars,	GarageArea,	SaleType) |>
   map(find_mode)
 
-ls_na_mode_sub <- df_sub |> 
-  select(MasVnrType, MasVnrArea, MSZoning, Utilities,	BsmtFullBath,	BsmtHalfBath,	Functional,	Exterior1st,	Exterior2nd,	BsmtFinSF1,	BsmtFinSF2,	BsmtUnfSF,	TotalBsmtSF,	KitchenQual,	GarageCars,	GarageArea,	SaleType) |>
-  map(find_mode)
+# map returns a list 
 
 # Replace with the created named-lists
-df_all <- df_all |>
-  replace_na(ls_na_mode_all) 
-  
-df_sub <- df_sub |>
-  replace_na(ls_na_mode_sub)
+ames_all <- ames_all |>
+  replace_na(list_na_mode) 
 
-# Check for last time for missing values:
-print("Training dataset")
-df_all |>
-  count_na()
-
-print("Submission dataset")
-df_sub |>
+# Sanity check of missing values:
+print("Full Ames dataset (train and test)")
+ames_all |>
+  select(-SalePrice) |>
   count_na()
 ```
 
@@ -200,42 +190,130 @@ df_sub |>
 
 ## Feature Engineering
 
-I have already started with the creation of a new predictor in the previous step, this to substitute a problematic variable with a lot of missing values. Data Science is not sequential, i.e., this is not the only step where *Feature Engieering* is applied. Think about the *modelling phase*, where you want to reduce features, e.g., where new Principal Components are the new features.
+I have already started with the creation of a new predictor in the previous step, this to substitute the problematic variable `GarageYrBlt` that had a lot of missing values.
 
-In this part I will establish which variables are categorical and numerical; this is not always as obvious as it seems[^3].
+Data Science is not sequential, i.e., this is not the only step where *Feature Engineering* is applied. 
+Think about the next *modelling phase*, where you want to reduce features, e.g., where new Principal Components are the new aggregators of original features.
 
-[^3]: Tip: integer variables like calendar *Years* can be treated as categories for the analysis.
+In this part I will establish which variables are categorical and numerical; this is not always as obvious as it seems[^4].
 
-The first easy thing to do that comes to mind is to add the Total Area of the property spaces.
+[^4]: Tip: integer variables like calendar *Years* can be treated as categories for the analysis.
+
+The first easy thing that comes to mind is to add the **total area of the property** as a new column named `TotalAreaSF`; SF means *Squared Feet*.
+
+After that, I check the [data documentation](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data) to see which variables can be thought as categoricals (factors) or Boolean; this can be tedeous if Real Estate is not your domain of expertise.
 
 ```{r}
 #| label: Feature Engineering
 
-df_all <- df_all |>
-  mutate(TotalAreaSF = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`)
+# --- Aggregable Count (Numerical) Features: 
+ames_all <- ames_all |>
 
-df_sub <- df_sub |>
-  mutate(TotalAreaSF = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`)
+  # NEW TotalBaths:
+  mutate(TotalBaths = BsmtFullBath + 0.5 * BsmtHalfBath + FullBath + 0.5 * HalfBath) |> 
+  select(-c(BsmtFullBath, BsmtHalfBath, FullBath, HalfBath)) |> # Bye bye...
+
+  # NEW TotalInteriorArea:
+  mutate(TotalInteriorArea = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`) |>
+  select(-c(BsmtFinSF1, BsmtFinSF2, `1stFlrSF`))|> # Bye bye...
+
+  # NEW TotalExteriorArea:
+  mutate(TotalExteriorArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + `3SsnPorch` + ScreenPorch) |>
+  select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, `3SsnPorch`, ScreenPorch)) # Bye bye...
+
+
+ames_all$LowQualFinSF <- NULL  # Most is 0, almost 0 variance. Low quality finished square feet (all floors)
+
+# ToDo: Check rest of Cats.
+
+# ames_all <- ames_all |>  
+#   as_factor(MSSubClass, MSZonin, Street, Alley, LotShape, LandContour, Utilities, LotConfig, LandSlope, Neighborhood, 
+#   Condition1, Condition2, BldgType, HouseStyle,   
+#   YearBuilt, RoofStyle, RoofMatl, Exterior1st, Exterior2nd, MasVnrType, ExterQual, ExterCond, Foundation, BsmtQual, BsmtCond, BsmtExposure, BsmtFinType1, BsmtFinType2, Heating,  HeatingQC,  
+#   Electrical, KitchenQual, Functional, FireplaceQu, GarageType, GarageFinish, GarageQual, GarageCond, PavedDrive, PoolQC, Fence, MiscFeature, MoSold, YrSold, SaleType, SaleCondition)
+
+
+# --- Categorical Features and Ordinal Feats.
+ames_all <- ames_all |>
+  mutate(OverallQual = factor(OverallQual)) |>
+  mutate(OverallCond = factor(OverallCond))  # Check level orders 1, ..., 10 (BEST)
+
+
+
+
+# Count Numerical Feats.
+
+# BedroomabvGr left numerical (count); # Kitchens (count) left numerical 
+# TotRmsAbvGrd numerical, Fireplaces, GarageCars, GarageArea, MiscVal
+# MasVnrArea Numeric
 
 ```
+
+After 2 hours of reading and delivering, above in the code I created `TotalBaths` to get rid of the four (04) *.Bath counting predictors. I'm considering that half bath more is equally more or less expensive as a full one.
+
+I would lke to transform the `YearRemodAdd` to a simpler binary `Remodelled` Yes or No variable, similar to what I did with the new `GarageNew` column.
+
+```{r}
+#| label: New Binary Feats
+
+# --- Binary Features   
+# Does the installation exist? Existing and new Feats. added
+
+# Check if the actual instalations exist. I think  useful for Trees... 
+
+ames_all <- ames_all |>
+  # CentralAir
+  mutate(CentralAir = if_else(CentralAir == "N", "No", "Yes")) |>
+  mutate(CentralAir = fct_relevel(CentralAir, "No", "Yes"))|>
+
+  # NEW IsRemodelled (it will replace YearRemodAdd)
+  mutate(IsRemodelled = if_else(YearRemodAdd - YearBuilt > 0, "Yes", "No")) |>
+  mutate(IsRemodelled = factor(IsRemodelled, levels = c("No", "Yes"))) |>
+  select(-YearRemodAdd) |> # Bye YearRemodAdd
+
+  # NEW ExistPool
+  mutate(ExistPool = if_else(PoolArea == 0, "No", "Yes")) |>
+  mutate(ExistPool = fct_relevel(ExistPool, "No", "Yes"))|>
+
+  # NEW ExistGarage
+  mutate(ExistGarage = if_else(GarageArea == 0, "No", "Yes")) |>
+  mutate(ExistGarage = fct_relevel(ExistGarage, "No", "Yes"))|>
+
+  # NEW ExistBsmt
+  mutate(ExistBsmt = if_else(TotalBsmtSF == 0, "No", "Yes")) |>
+  mutate(ExistBsmt = fct_relevel(ExistBsmt, "No", "Yes"))|>
+
+  # NEW Exist2ndFloor
+  mutate(Exist2ndFloor = if_else(`2ndFlrSF` == 0, "No", "Yes")) |>
+  select(-`2ndFlrSF`) |> # Bye, bye... 
+  mutate(Exist2ndFloor = fct_relevel(Exist2ndFloor, "No", "Yes")) |>
+
+  # NEW ExistFireplace
+  mutate(ExistFireplace = if_else(Fireplaces == 0, "No", "Yes")) |>
+  mutate(ExistFireplace = fct_relevel(ExistFireplace, "No", "Yes"))
+
+glimpse(ames_all)
+```
+
+
 
 # Correlograms:
 
 ```{r}
-library(corrplot)
+# library(corrplot)
 
-df_all |>
-  select(where(is.numeric)) |>
-  cor(method = "pearson") |>
-  corrplot(type = "upper", order="hclust", diag = TRUE, tl.col="black", tl.cex = 0.7, #addCoef.col = 'black', 
-          number.cex = 0.6)
+# df_all |>
+#   select(where(is.numeric)) |>
+#   cor(method = "pearson") |>
+#   corrplot(type = "upper", order="hclust", diag = TRUE, tl.col="black", tl.cex = 0.7, #addCoef.col = 'black', 
+#           number.cex = 0.6)
 
 
-df_all |>
-  select(where(is.numeric)) |>
-  cor(method = "spearman") |>
-  corrplot(type = "upper", order="hclust", diag = TRUE, tl.col="black", tl.cex = 0.7, #addCoef.col = 'black', 
-          number.cex = 0.6)
+# df_all |>
+#   select(where(is.numeric)) |>
+#   cor(method = "spearman") |>
+#   corrplot(type = "upper", order="hclust", diag = TRUE, tl.col="black", tl.cex = 0.7, #addCoef.col = 'black', 
+#           number.cex = 0.6)
 
 # m_cor_num <- cor(na.omit(df_all))
 #m_cor_num_ordered <- m_cor_num[order(m_cor_num[, 36]), ]
@@ -249,17 +327,19 @@ df_all |>
 
 # Data Transformations
 
-The moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best[^4]. 
+The moment the first data transformation is performed, we start to loose interpretability very quickly. 
+Nowadays, the most accurate predictions need more than one transformation in order to work best[^5]. 
 
-[^4]: Tip: Forget about lineaerity and interpretability if you want the most accurate results.  
+[^5]: Tip: Forget about lineaerity and interpretability if you want the most accurate results.  
 
 If understanding and interpretability is your first goal, then start with a parametric linear model.
 
-In my experience, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time Log-Normal. Rarely is something free, so you don't have zeros; think about the top 1% of reach people, or anything that becomes exotic or **premium** the higher the ammount of money is involved. These are long and sparsed tails.
+In my experience, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time Log-Normal. 
+Rarely is something free, so you don't have zeros; think about the top 1% of reach people, or anything that becomes exotic or **premium** the higher the ammount of money is involved. These are long and sparsed tails.
 
-Logarithmic transformations work when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^5], making the distribution of the values more normal-like.
+Logarithmic transformations work when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^6], making the distribution of the values more normal-like.
 
-[^5]: Tip: think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
+[^6]: Tip: think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
 
 # PHASE 2: MODELLING
 
@@ -365,17 +445,6 @@ References can be displayed as margin notes for HTML output. For example, we can
 ::: {.callout-note appearance="simple"}
 This feature depends upon `link-citations` to locate and place references in the margin. This is enabled by default, but if you disable `link-citations` then references in the HTML output will be placed at the end of the output document as they normally are.
 :::
-
-# Tables
-
-You can use the `kable()` function from the **knitr** package to format tables that integrate well with the rest of the Tufte handout style. The table captions are placed in the margin like figures in the HTML output.
-
-```{r}
-#| tbl-cap-location: margin
-knitr::kable(
-  mtcars[1:6, 1:6], caption = 'A subset of mtcars.'
-)
-```
 
 # Responsiveness
 
