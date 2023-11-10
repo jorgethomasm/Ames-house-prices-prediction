@@ -44,9 +44,9 @@ In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] yo
 
 The Ames House dataset was prepared to improve on the older classic Boston Houses dataset and, given its open competition nature, it comprises two files:
 
-1. One file contains features and labels (predictors and response). Here this is the *training dataset*. It's all I have to split the *Data Budget*.
+1. One file contains features and labels (or what's the same predictors and response). Here this is the *training dataset*. It's all I have to split the *Data Budget*.
 
-2. Another file contains only features (predictors) to make predictions for the final submissions. Here this is the *submission dataset*.
+2. Another file contains only features (predictors) to make predictions for the final submissions. Here this is the *test dataset*.
 
 The goal of the competition is to achieve minimum RMSE.
 
@@ -57,9 +57,9 @@ I will keep updating this notebook, making improvements and reporting the rank o
 ## Extract Data
 
 I checked beforehands that there are no missing values, here `NA`, in the target variable `SalePrice`. 
-Therefore, I will write a pipeline to read and concatenate both datasets, adding and extra column `dataset` to label as "train" and "test" for further easy splitting[^1] (subset or filter).
+Therefore, I will write a pipeline to read and concatenate both datasets (bind rows), adding and extra column `dataset` to label as "train" and "test" for further easy splitting[^1] (subset or filter).
 
-[^1]: Tip: The whole Feature Transformation pipeline most be always the same for all, old and new predictors.
+[^1]: Tip: The whole Feature Transformation pipeline most be always the same for all predictors in both datasets.
 
 ```{r}
 #| label: Load Data
@@ -83,7 +83,7 @@ print("Available variables:")
 names(ames_all)
 ```
 
-[comment]: <> In order to organise my **Data Budget** I count on 1460 Observations of 79 predictors (one column is only an `Id` per house) and the Response, which is the `SalePrice` of the houses at the end of the list above.
+In order to organise my **Data Budget** I count on the **train dataset** with 1460 Observations of 79 predictors (one column is only an `Id` per house) and the Response, which is the `SalePrice` of the houses at the end of the list above.
 
 Note that `Id` and the just added `dataset` columns are not predictors. Hence, there are **79 features** to play  with. Also rememeber that the number of features for modelling will vary. Some will be discarded and some will be created along the analysis.
 
@@ -96,11 +96,11 @@ ames_all$Id <- NULL
 
 ## Impute Missing Values
 
-First things first, read the full data description[^2]. The manifest is available [here](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data). There you'll find that for several columns missing values `NA` means actually *"None"*. The physical absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the response `SalePrice`.
+First things first, read the full data description[^2]. The manifest is available [here](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data). There you'll find that for several columns missing values `NA` means actually *"None"*. The physical absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the response `SalePrice`. Later it is most probably that binary features indicating the existance of some installations should be created.
 
 Therefore, I will fill the empty `NA` fields of the indicated columns of both datasets with the string *"None"*.
 
-[^2]: Tip: **print a copy**, make notes and study it. This is the first step to get into domain knowledge for *Feature Engineering* in the modelling phase.
+[^2]: Tip: **print a copy**, make notes and study it. This is the first step to get into domain knowledge, in this case Real Estate, for later *Feature Engineering*.
 
 ```{r}
 #| label: easy replace_na
@@ -135,13 +135,13 @@ ames_all |>
   knitr::kable(caption = 'Ames dataset')
 ```
 
-I will fill the remaining missing values as follow:
+I'll fill the remaining missing values as follow:
 
-- The `LotFrontage` column refers to the linear feet of street connected to the house. This feature is not well documented and the missing percentage related to other variables makes it unreliable, therefore, I will delete the feature.
+- The `LotFrontage` column refers to the linear feet of street connected to the house. This feature is not well documented and the missing percentage related to other variables makes it not only unreliable, but very low in variance. Therefore, I will delete the feature.
 
-- Everytime there is no garage, i.e., `GarageType = "None"`, there is the corresponding missing value in Garage Year Built `GarageYrBlt = NA`. I will **engineer a new feature** called `GarageNew` with three ordinal categories: None, No, Yes. This based on the delta of `YearBuilt - GarageYrBlt`; I expect that given the house price, the algorithm will learn that "None" is worse than "No" and so on. Then I will remove the `GarageYrBlt` predictor.
+- Everytime a Garage doesn't exist, i.e., `GarageType = "None"`, there is the corresponding missing value in Garage Year Built `GarageYrBlt = NA`. I will **engineer a new feature** called `GarageNew` with three ordinal categories: None, No, Yes. This based on the delta of `YearBuilt - GarageYrBlt`; I expect that given the house price, the algorithm will learn that "None" is worse than "No" and so on. Then I will remove the `GarageYrBlt` predictor.
 
-- For the rest of variables with a 1 % or less `NA`, I'll calculate the **median** (if numerical) and the **mode** (if categorical) in order to fill them with it.
+- For the rest of variables with a 1 % or less missing values `NA`, I'll calculate the **median** (if numerical) and the **mode** (if string) in order to fill them with it.
 
 Here's my pipeline for the whole dataset:
 
@@ -192,7 +192,7 @@ ames_all |>
 
 I have already started with the creation of a new predictor in the previous step, this to substitute the problematic variable `GarageYrBlt` that had a lot of missing values.
 
-Data Science is not sequential, i.e., this is not the only step where *Feature Engineering* is applied. 
+Feature creation and transformations are not sequential, i.e., this is not the only step where *Feature Engineering* is applied. 
 Think about the next *modelling phase*, where you want to reduce features, e.g., where new Principal Components are the new aggregators of original features.
 
 In this part I will establish which variables are categorical and numerical; this is not always as obvious as it seems[^4].
@@ -201,65 +201,49 @@ In this part I will establish which variables are categorical and numerical; thi
 
 The first easy thing that comes to mind is to add the **total area of the property** as a new column named `TotalAreaSF`; SF means *Squared Feet*.
 
-After that, I check the [data documentation](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data) to see which variables can be thought as categoricals (factors) or Boolean; this can be tedeous if Real Estate is not your domain of expertise.
+After that, I check the [data documentation](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data) to see which variables can be thought as categoricals (factors); this can be tedeous if Real Estate is not your domain of expertise. 
+
+After 1.5 hours of reading, googling, understanding other notebooks and deliberating (yes, it was tedeous), I can summarise four types of ways to engineer new features depending on the nature of the variables:
+
+1. Aggregation to a total of **continous-numerical** surface area (Square Feet), e.g. new `TotalInteriorArea` Feat. summing basement and floors, etc. Same for a new `TotalExteriorArea`. Then deleting the addends variables.
+
+2. Aggregation to a total of **numerical counts** of an available installation of a determined type, e.g. new `TotalBaths`. Then deleting the addends variables.
+
+3. Categorisation with ascending quality levels of the originally numerical variables `OverallQual` and `OverallCond`. 
+
+4. Creation of new **binary** features that state if a determined installation exists or not.
+
+Here's the code that complies with the four previous steps:
 
 ```{r}
 #| label: Feature Engineering
 
-# --- Aggregable Count (Numerical) Features: 
+# --- Total Aggregations ----
 ames_all <- ames_all |>
 
-  # NEW TotalBaths:
-  mutate(TotalBaths = BsmtFullBath + 0.5 * BsmtHalfBath + FullBath + 0.5 * HalfBath) |> 
-  select(-c(BsmtFullBath, BsmtHalfBath, FullBath, HalfBath)) |> # Bye bye...
-
-  # NEW TotalInteriorArea:
+  # Continuous numerical ----
+  # NEW TotalInteriorArea
   mutate(TotalInteriorArea = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`) |>
   select(-c(BsmtFinSF1, BsmtFinSF2, `1stFlrSF`))|> # Bye bye...
 
-  # NEW TotalExteriorArea:
+  # NEW TotalExteriorArea
   mutate(TotalExteriorArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + `3SsnPorch` + ScreenPorch) |>
-  select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, `3SsnPorch`, ScreenPorch)) # Bye bye...
+  select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, `3SsnPorch`, ScreenPorch)) |># Bye bye...
+
+  # Counting numerical ----
+  # NEW TotalBaths
+  mutate(TotalBaths = BsmtFullBath + 0.5 * BsmtHalfBath + FullBath + 0.5 * HalfBath) |> 
+  select(-c(BsmtFullBath, BsmtHalfBath, FullBath, HalfBath)) # Bye bye...
 
 
-ames_all$LowQualFinSF <- NULL  # Most is 0, almost 0 variance. Low quality finished square feet (all floors)
-
-# ToDo: Check rest of Cats.
-
-# ames_all <- ames_all |>  
-#   as_factor(MSSubClass, MSZonin, Street, Alley, LotShape, LandContour, Utilities, LotConfig, LandSlope, Neighborhood, 
-#   Condition1, Condition2, BldgType, HouseStyle,   
-#   YearBuilt, RoofStyle, RoofMatl, Exterior1st, Exterior2nd, MasVnrType, ExterQual, ExterCond, Foundation, BsmtQual, BsmtCond, BsmtExposure, BsmtFinType1, BsmtFinType2, Heating,  HeatingQC,  
-#   Electrical, KitchenQual, Functional, FireplaceQu, GarageType, GarageFinish, GarageQual, GarageCond, PavedDrive, PoolQC, Fence, MiscFeature, MoSold, YrSold, SaleType, SaleCondition)
-
-
-# --- Categorical Features and Ordinal Feats.
+# ---- Ordered Categorical Features ----
 ames_all <- ames_all |>
   mutate(OverallQual = factor(OverallQual)) |>
   mutate(OverallCond = factor(OverallCond))  # Check level orders 1, ..., 10 (BEST)
 
 
-
-
-# Count Numerical Feats.
-
-# BedroomabvGr left numerical (count); # Kitchens (count) left numerical 
-# TotRmsAbvGrd numerical, Fireplaces, GarageCars, GarageArea, MiscVal
-# MasVnrArea Numeric
-
-```
-
-After 2 hours of reading and delivering, above in the code I created `TotalBaths` to get rid of the four (04) *.Bath counting predictors. I'm considering that half bath more is equally more or less expensive as a full one.
-
-I would lke to transform the `YearRemodAdd` to a simpler binary `Remodelled` Yes or No variable, similar to what I did with the new `GarageNew` column.
-
-```{r}
-#| label: New Binary Feats
-
-# --- Binary Features   
-# Does the installation exist? Existing and new Feats. added
-
-# Check if the actual instalations exist. I think  useful for Trees... 
+# ---- Binary Features ----
+# Does the installation exist? 
 
 ames_all <- ames_all |>
   # CentralAir
@@ -292,21 +276,54 @@ ames_all <- ames_all |>
   mutate(ExistFireplace = if_else(Fireplaces == 0, "No", "Yes")) |>
   mutate(ExistFireplace = fct_relevel(ExistFireplace, "No", "Yes"))
 
-glimpse(ames_all)
+
+# ---- The rest are factors ----
+# I'm going to assume that the rest are Categorical variables 
+
+ames_all <- ames_all |>  
+  mutate_at(dplyr::vars(MSSubClass, MSZoning, Street, Alley, LotShape, LandContour, Utilities, LotConfig, LandSlope, Neighborhood,
+  Condition1, Condition2, BldgType, HouseStyle, YearBuilt, RoofStyle, RoofMatl, Exterior1st, Exterior2nd, MasVnrType, ExterQual, ExterCond, 
+  Foundation, BsmtQual, BsmtCond, BsmtExposure, BsmtFinType1, BsmtFinType2, Heating,  HeatingQC, Electrical, KitchenQual, Functional, FireplaceQu, 
+  GarageType, GarageFinish, GarageQual, GarageCond, PavedDrive, PoolQC, Fence, MiscFeature, MoSold, YrSold, SaleType, SaleCondition), 
+  factor)
+
+# ---- Numerical Features ----
+
+# BedroomabvGr (count) left numerical 
+# Kitchens (count) left numerical 
+# TotRmsAbvGrd (count) left numerical
+# Fireplaces (count) left numerical
+# GarageCars (count) left numerical
+# GarageArea (continous) left numerical 
+# MiscVal left numerical 
+# MasVnrArea (continous) left numeric
+
+# Finally get rid of 'LowQualFinSF'
+# Low quality finished square feet (all floors) -> Most of the values are 0 -> almost 0 variance. 
+ames_all$LowQualFinSF <- NULL
 ```
 
+Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable, similar to what I did with the new `GarageNew` column.
 
+OK! Let's move on. It's PLOT TIME!
 
-# Correlograms:
+### Plots 
+
+#### Pearson's Correlograms
+
+Although nothing is linear, is good to have an idea of correlation between features; after doing previous steps, it's obvious there are correlations.
 
 ```{r}
-# library(corrplot)
+#| label: Inspect linear correlations
 
-# df_all |>
-#   select(where(is.numeric)) |>
-#   cor(method = "pearson") |>
-#   corrplot(type = "upper", order="hclust", diag = TRUE, tl.col="black", tl.cex = 0.7, #addCoef.col = 'black', 
-#           number.cex = 0.6)
+library(corrplot)
+
+ames_all |>
+  select(where(is.numeric)) |>
+  select(-SalePrice) |>
+  cor(method = "pearson") |>
+  corrplot(type = "upper", order="hclust", diag = TRUE, tl.col="black", tl.cex = 0.7, #addCoef.col = 'black', 
+          number.cex = 0.6)
 
 
 # df_all |>
@@ -342,6 +359,8 @@ Logarithmic transformations work when there are few large values, like in this c
 [^6]: Tip: think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
 
 # PHASE 2: MODELLING
+
+&emsp; *"This is where the fun begins."*  – H. Solo
 
 ## Reference Model
 
