@@ -25,8 +25,8 @@ bibliography: HousePrices.bib
 #| echo: false
 
 library(tidyverse) # ETL and EDA tools
-source("./tools/jthomsfunctions.r")
-theme_set(jtggtheme)
+source("./tools/jthom_functions.r")
+theme_set(jthom_ggtheme)
 ```
 
 ::: {#fig-intro layout-ncol=2}
@@ -207,11 +207,11 @@ After 1.5 hours of reading, googling, understanding other notebooks and delibera
 
 1. Aggregation to a total of **continous-numerical** surface area (Square Feet), e.g. new `TotalInteriorArea` Feat. summing basement and floors, etc. Same for a new `TotalExteriorArea`. Then deleting the addends variables.
 
-2. Aggregation to a total of **numerical counts** of an available installation of a determined type, e.g. new `TotalBaths`. Then deleting the addends variables.
+2. Aggregation to a total of **numerical counts** of an available installation of a determined type, e.g. new `TotalBaths`. Then deleting the addends.
 
 3. Categorisation with ascending quality levels of the originally numerical variables `OverallQual` and `OverallCond`. 
 
-4. Creation of new **binary** features that state if a determined installation exists or not.
+4. Creation of new **binary** features that state if a determined installation exists or doesn't.
 
 Here's the code that complies with the four previous steps:
 
@@ -280,12 +280,8 @@ ames_all <- ames_all |>
 # ---- The rest are factors ----
 # I'm going to assume that the rest are Categorical variables 
 
-ames_all <- ames_all |>  
-  mutate_at(dplyr::vars(MSSubClass, MSZoning, Street, Alley, LotShape, LandContour, Utilities, LotConfig, LandSlope, Neighborhood,
-  Condition1, Condition2, BldgType, HouseStyle, YearBuilt, RoofStyle, RoofMatl, Exterior1st, Exterior2nd, MasVnrType, ExterQual, ExterCond, 
-  Foundation, BsmtQual, BsmtCond, BsmtExposure, BsmtFinType1, BsmtFinType2, Heating,  HeatingQC, Electrical, KitchenQual, Functional, FireplaceQu, 
-  GarageType, GarageFinish, GarageQual, GarageCond, PavedDrive, PoolQC, Fence, MiscFeature, MoSold, YrSold, SaleType, SaleCondition), 
-  factor)
+ames_all <- ames_all |>
+  mutate(across(where(is.character), factor))
 
 # ---- Numerical Features ----
 
@@ -298,51 +294,57 @@ ames_all <- ames_all |>
 # MiscVal left numerical 
 # MasVnrArea (continous) left numeric
 
-# Finally get rid of 'LowQualFinSF'
-# Low quality finished square feet (all floors) -> Most of the values are 0 -> almost 0 variance. 
+
+# ---- Remove 'LowQualFinSF' ----
+
+# Low quality finished square feet (all floors)
+# Most of the values are 0 -> almost 0 variance. 
 ames_all$LowQualFinSF <- NULL
+
 ```
 
 Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable, similar to what I did with the new `GarageNew` column.
 
-OK! Let's move on. It's PLOT TIME!
+OK! Let's move on. 
 
-### Plots 
-
-#### Pearson's Correlograms
-
-Although nothing is linear, is good to have an idea of correlation between features; after doing previous steps, it's obvious there are correlations.
+### Response behaviour analysis
 
 ```{r}
-#| label: Inspect linear correlations
-
-library(corrplot)
+#| label: Response behaviour
+#| message: false
+#| warning: false
+#| fig-show: hold
+#| fig-width: 12
+#| fig-height: 6
+#| fig-column: page-right
+#| layout-ncol: 2
+#| fig-cap: 
+#|   - "The response variable is clearly not well-bahaved. In order to achieve better predictions, a transformation of this variable in needed."
+#| fig-subcap: 
+#|   - "Histogram of Sale Prices"
+#|   - "Q-Q Plot of Sale Prices"
+#| cap-location: margin
 
 ames_all |>
-  select(where(is.numeric)) |>
-  select(-SalePrice) |>
-  cor(method = "pearson") |>
-  corrplot(type = "upper", order="hclust", diag = TRUE, tl.col="black", tl.cex = 0.7, #addCoef.col = 'black', 
-          number.cex = 0.6)
+  filter(dataset == "train") |>
+  ggplot(aes(x = SalePrice/1000)) +  
+  geom_histogram(bins = 50, color = "seagreen", fill = "seagreen", alpha = 0.5) +
+  scale_x_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +  
+  labs(x = "Sale Price ['000 $]")
 
-
-# df_all |>
-#   select(where(is.numeric)) |>
-#   cor(method = "spearman") |>
-#   corrplot(type = "upper", order="hclust", diag = TRUE, tl.col="black", tl.cex = 0.7, #addCoef.col = 'black', 
-#           number.cex = 0.6)
-
-# m_cor_num <- cor(na.omit(df_all))
-#m_cor_num_ordered <- m_cor_num[order(m_cor_num[, 36]), ]
-
-
-
-
-
+ames_all |>
+  filter(dataset == "train") |> 
+  ggplot(aes(sample = SalePrice/1000)) + 
+  stat_qq(color = "seagreen", alpha = 0.5) + 
+  stat_qq_line(color = "seagreen") + 
+  scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +
+  labs(y = "Sale Price\n['000 $]",
+       x = "Theoretical Quantiles (Norm. Dist.)")
 
 ```
 
-# Data Transformations
+
+#### Data Transformations
 
 The moment the first data transformation is performed, we start to loose interpretability very quickly. 
 Nowadays, the most accurate predictions need more than one transformation in order to work best[^5]. 
@@ -357,6 +359,45 @@ Rarely is something free, so you don't have zeros; think about the top 1% of rea
 Logarithmic transformations work when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^6], making the distribution of the values more normal-like.
 
 [^6]: Tip: think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
+
+
+### Plots 
+
+It's PLOT TIME!
+
+#### Pearson's Correlograms
+
+Although **nothing is linear**, is good to have an idea of correlation between features; after doing previous steps, it's obvious there are correlations.
+
+```{r}
+#| label: Inspect linear correlations
+#| fig-cap: write something...
+#| warning: false
+#| message: false
+
+library(corrplot)
+
+ames_all |>
+  select(where(is.numeric)) |>  
+  cor(method = "pearson") |>
+  corrplot(type = "lower", order="hclust", diag = TRUE, 
+  tl.col="black", tl.cex = 0.7, addCoef.col = 'black', number.cex = 0.6)
+
+
+
+
+
+# m_cor_num <- cor(na.omit(ames_all))
+# m_cor_num_ordered <- m_cor_num[order(m_cor_num[, 36]), ]
+
+
+
+
+
+
+```
+
+
 
 # PHASE 2: MODELLING
 

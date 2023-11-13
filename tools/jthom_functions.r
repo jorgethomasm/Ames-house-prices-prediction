@@ -1,23 +1,23 @@
 # JT's functins:
 
-jtggtheme <- theme_minimal() +
+jthom_ggtheme <- theme_minimal() +
   theme(
-        plot.title = element_text(size = 10,
+        plot.title = element_text(size = 14,
                                   hjust = 0.5),
         axis.ticks = element_line(),
         # Y-axis:
         axis.title.y = element_text(angle = 0,
-                                    size = 9,
+                                    size = 12,
                                     vjust = 0.5,
                                     face = "bold"),
-        axis.text.y  = element_text(size = 8),
+        axis.text.y  = element_text(size = 11),
         # X-axis:
         axis.title.x = element_text(angle = 0,
-                                    size = 9,
+                                    size = 12,
                                     vjust = 0.5,
                                     face = "bold"),
         axis.text.x  = element_text(angle = 0,
-                                    size = 8))
+                                    size = 11))
 
 count_na <- function(df) {
   n_rows <- nrow(df)
