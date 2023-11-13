@@ -1,6 +1,6 @@
 ---
 title: "Prediction of House Prices in Ames"
-subtitle: "My approach to advance regression with visual analytics techniques." # only for html output
+subtitle: "My commented and visual walk-through advance regression techniques." # only for html output
 author: "Jorge A. Thomas"
 date: "`r Sys.Date()`"
 format:    
@@ -30,7 +30,6 @@ theme_set(jthom_ggtheme)
 ```
 
 ::: {#fig-intro layout-ncol=2}
-
 ![Houses](./imgs/ames_gai_16x9.jpeg){width=100%}
 
 ![Location](./imgs/Ames_map.png){width=100%}
@@ -96,7 +95,7 @@ ames_all$Id <- NULL
 
 ## Impute Missing Values
 
-First things first, read the full data description[^2]. The manifest is available [here](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data). There you'll find that for several columns missing values `NA` means actually *"None"*. The physical absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the response `SalePrice`. Later it is most probably that binary features indicating the existance of some installations should be created.
+First things first, read the full [data description](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data)[^2]. There you'll find that for several columns, missing values `NA` means actually *"None"*. The physical absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the response `SalePrice`. Later it is most probably that binary features indicating the existance of some installations should be created.
 
 Therefore, I will fill the empty `NA` fields of the indicated columns of both datasets with the string *"None"*.
 
@@ -307,23 +306,71 @@ Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable,
 
 OK! Let's move on. 
 
-### Response behaviour analysis
+### Searching for simple correlations
+
+Although **nothing is linear**, is good to have an idea of simple correlations between all variables. After going through the previous steps, it's obvious that there are correlations. Think about the number of cars that fit in a garage `GarageCars` and the area of the garage `GarageArea`.
 
 ```{r}
-#| label: Response behaviour
+#| label: fig-num-corr
+#| fig-width: 8
+#| fig-height: 8
+#| fig-cap: Pearson's correlation of numeric features and response.
+#| cap-location: margin
+#| warning: false
+#| message: false
+
+library(corrplot)
+
+ames_all |>
+  filter(dataset == "train") |>
+  select(-dataset) |>
+  select(where(is.numeric)) |>  
+  cor(method = "pearson") |>
+  corrplot(type = "lower", method = "circle", insig = 'blank', order = "hclust", diag = TRUE,
+  tl.col="black", tl.cex = 0.8, addCoef.col = 'black', number.cex = 0.6)
+
+```
+
+I'm leaving blank the insignificant correlations for better visualisation and focus. Now I'm checking the categorical variables and the response.
+
+```{r}
+#| label: fig-cat-corr
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: Pearson's correlation of categorical features and response.
+#| cap-location: margin
+#| warning: false
+#| message: false
+
+ames_all |>
+  filter(dataset == "train") |>
+  select(-dataset) |>
+  select(where(is.factor) | contains("Price")) |>  
+  mutate_if(is.factor, as.integer) |> 
+  cor(method = "pearson") |>
+  corrplot(type = "lower", order="hclust", diag = TRUE, insig = 'blank',
+  tl.col="black", tl.cex = 0.8, number.cex = 0.6)
+
+```
+
+Basically all that has to do with *quality* ratings is very important for the final sale price.
+
+### Analysis of the response variable: Sale Price
+
+How well-behaved is the target? Let's see it:
+
+```{r}
+#| label: fig-Y
 #| message: false
 #| warning: false
-#| fig-show: hold
-#| fig-width: 12
+#| column: page-right
+#| fig-width: 6
 #| fig-height: 6
-#| fig-column: page-right
-#| layout-ncol: 2
-#| fig-cap: 
-#|   - "The response variable is clearly not well-bahaved. In order to achieve better predictions, a transformation of this variable in needed."
+#| fig-cap: "Response Analysis."
 #| fig-subcap: 
-#|   - "Histogram of Sale Prices"
-#|   - "Q-Q Plot of Sale Prices"
-#| cap-location: margin
+#|   - "Histogram"
+#|   - "Q-Q Plot"
+#| layout-ncol: 2
 
 ames_all |>
   filter(dataset == "train") |>
@@ -336,74 +383,101 @@ ames_all |>
   filter(dataset == "train") |> 
   ggplot(aes(sample = SalePrice/1000)) + 
   stat_qq(color = "seagreen", alpha = 0.5) + 
-  stat_qq_line(color = "seagreen") + 
+  stat_qq_line(color = "seagreen") +  
   scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +
   labs(y = "Sale Price\n['000 $]",
        x = "Theoretical Quantiles (Norm. Dist.)")
 
 ```
 
+The target variable (Y) is clearly not well-bahaved; it shows a log-normal distribution heavily skewed to right. In order to achieve better predictions, a transformation will be needed.
 
-#### Data Transformations
+#### Transformation of the response
+
+In my experience, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time **Log-normal**. 
+Rarely is something free, so you don't have zeros; think about the top 1% of reach people, or anything that becomes exotic or **premium** the higher the ammount of money is involved. These are long and sparsed tails.
 
 The moment the first data transformation is performed, we start to loose interpretability very quickly. 
 Nowadays, the most accurate predictions need more than one transformation in order to work best[^5]. 
 
 [^5]: Tip: Forget about lineaerity and interpretability if you want the most accurate results.  
 
-If understanding and interpretability is your first goal, then start with a parametric linear model.
-
-In my experience, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time Log-Normal. 
-Rarely is something free, so you don't have zeros; think about the top 1% of reach people, or anything that becomes exotic or **premium** the higher the ammount of money is involved. These are long and sparsed tails.
-
-Logarithmic transformations work when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^6], making the distribution of the values more normal-like.
+The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^6], making the distribution of the values more normal-like.
 
 [^6]: Tip: think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
 
-
-### Plots 
-
-It's PLOT TIME!
-
-#### Pearson's Correlograms
-
-Although **nothing is linear**, is good to have an idea of correlation between features; after doing previous steps, it's obvious there are correlations.
+However, because we have a computer and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of transformations (functions) that includes the logarithmic one.
 
 ```{r}
-#| label: Inspect linear correlations
-#| fig-cap: write something...
+#| label: fig-boxcox
+#| fig-cap: "Best parameter lambda near 0. Almost a pure logarithmic transformation."
+#| column: margin
+#| code-fold: false
 #| warning: false
 #| message: false
 
-library(corrplot)
+boxcox_trans <- MASS::boxcox(lm(SalePrice ~ 1, data = subset(ames_all, dataset == "train")), 
+                             lambda = seq(-1, 1), 
+                             plotit = TRUE)
+
+lambda <- as.numeric(boxcox_trans$x[which.max(boxcox_trans$y)])
+
+# New transformed response variable
+ames_all <- ames_all |>
+  mutate(SalePrice_bc = (SalePrice^lambda - 1) / lambda)
+
+```
+
+The new `SalePrice_bc` should be better behaved...
+
+```{r}
+#| label: fig-Y-trans
+#| message: false
+#| warning: false
+#| column: page-right
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: "Transformed Response."
+#| fig-subcap: 
+#|   - "Histogram"
+#|   - "Q-Q Plot"
+#| layout-ncol: 2
 
 ames_all |>
-  select(where(is.numeric)) |>  
-  cor(method = "pearson") |>
-  corrplot(type = "lower", order="hclust", diag = TRUE, 
-  tl.col="black", tl.cex = 0.7, addCoef.col = 'black', number.cex = 0.6)
+  filter(dataset == "train") |>
+  ggplot(aes(x = SalePrice_bc)) +  
+  geom_histogram(bins = 50, color = "seagreen", fill = "seagreen", alpha = 0.5) +  
+  labs(x = "Sale Price [Box-Cox]")
 
+ames_all |>
+  filter(dataset == "train") |> 
+  ggplot(aes(sample = SalePrice_bc)) + 
+  stat_qq(color = "seagreen", alpha = 0.5) + 
+  stat_qq_line(color = "seagreen") +   
+  labs(y = "Sale Price\n[Box-Cox]", x = "Theoretical Quantiles (Norm. Dist.)")
 
+```
 
+... and it is, indeed. Well, except for the tails now it's normal at the core.
 
+**I will include the *transformation of the response* as a step within a recipe in the modelling phase.**
 
-# m_cor_num <- cor(na.omit(ames_all))
-# m_cor_num_ordered <- m_cor_num[order(m_cor_num[, 36]), ]
+# PHASE 2: MODELLING
 
+&emsp; *"This is where the fun begins."*  – H. Solo
+
+One of the motivations to develop this project is because I'm switching to the **Tidymodels** package. Therefore it's time to load the library to train a simple reference model.
+
+## Reference Model
+
+```{r}
+#| label: modelling
 
 
 
 
 
 ```
-
-
-
-# PHASE 2: MODELLING
-
-&emsp; *"This is where the fun begins."*  – H. Solo
-
-## Reference Model
 
 ## Model Selection
 
