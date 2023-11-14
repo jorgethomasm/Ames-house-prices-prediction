@@ -198,15 +198,15 @@ In this part I will establish which variables are categorical and numerical; thi
 
 [^4]: Tip: integer variables like calendar *Years* can be treated as categories for the analysis.
 
-The first easy thing that comes to mind is to add the **total area of the property** as a new column named `TotalAreaSF`; SF means *Squared Feet*.
+The first easy thing that comes to mind is to add the **total area of the property** as a new column named `TotAreaSF`; SF means *Squared Feet*.
 
 After that, I check the [data documentation](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data) to see which variables can be thought as categoricals (factors); this can be tedeous if Real Estate is not your domain of expertise. 
 
 After 1.5 hours of reading, googling, understanding other notebooks and deliberating (yes, it was tedeous), I can summarise four types of ways to engineer new features depending on the nature of the variables:
 
-1. Aggregation to a total of **continous-numerical** surface area (Square Feet), e.g. new `TotalInteriorArea` Feat. summing basement and floors, etc. Same for a new `TotalExteriorArea`. Then deleting the addends variables.
+1. Aggregation to a total of **continous-numerical** surface area (Square Feet), e.g. new `TotInteriorArea` Feat. summing basement and floors, etc. Same for a new `TotExteriorArea`. Then deleting the addends variables.
 
-2. Aggregation to a total of **numerical counts** of an available installation of a determined type, e.g. new `TotalBaths`. Then deleting the addends.
+2. Aggregation to a total of **numerical counts** of an available installation of a determined type, e.g. new `TotBaths`. Then deleting the addends.
 
 3. Categorisation with ascending quality levels of the originally numerical variables `OverallQual` and `OverallCond`. 
 
@@ -222,16 +222,16 @@ ames_all <- ames_all |>
 
   # Continuous numerical ----
   # NEW TotalInteriorArea
-  mutate(TotalInteriorArea = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`) |>
+  mutate(TotInteriorArea = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`) |>
   select(-c(BsmtFinSF1, BsmtFinSF2, `1stFlrSF`))|> # Bye bye...
 
   # NEW TotalExteriorArea
-  mutate(TotalExteriorArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + `3SsnPorch` + ScreenPorch) |>
+  mutate(TotExteriorArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + `3SsnPorch` + ScreenPorch) |>
   select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, `3SsnPorch`, ScreenPorch)) |># Bye bye...
 
   # Counting numerical ----
   # NEW TotalBaths
-  mutate(TotalBaths = BsmtFullBath + 0.5 * BsmtHalfBath + FullBath + 0.5 * HalfBath) |> 
+  mutate(TotBaths = BsmtFullBath + 0.5 * BsmtHalfBath + FullBath + 0.5 * HalfBath) |> 
   select(-c(BsmtFullBath, BsmtHalfBath, FullBath, HalfBath)) # Bye bye...
 
 
@@ -308,7 +308,7 @@ OK! Let's move on.
 
 ### Searching for simple correlations
 
-Although **nothing is linear**, is good to have an idea of simple correlations between all variables. After going through the previous steps, it's obvious that there are correlations. Think about the number of cars that fit in a garage `GarageCars` and the area of the garage `GarageArea`.
+Although **nothing is linear**, is good to have an idea of simple correlations between all variables; it gives me an idea of what kind of plots to make. After going through the previous steps, it's obvious that there are correlations. Think about the number of cars that fit in a garage `GarageCars` and the area of the garage `GarageArea`.
 
 ```{r}
 #| label: fig-num-corr
@@ -331,7 +331,9 @@ ames_all |>
 
 ```
 
-I'm leaving blank the insignificant correlations for better visualisation and focus. Now I'm checking the categorical variables and the response.
+According to the matrix above, `GrLivArea` has the strongest linear relationship with the target `SalePrice`, followed by `TotInteriorArea`, this given the collinearity with `GrLivArea`, and then `GarageArea` or `GarageCars`, both heavily correlated too, like commented before. 
+
+I'm leaving blank, i.e., without a circle, the insignificant correlations for better visualisation and focus. Now I'm checking the categorical variables and the response.
 
 ```{r}
 #| label: fig-cat-corr
@@ -353,7 +355,97 @@ ames_all |>
 
 ```
 
-Basically all that has to do with *quality* ratings is very important for the final sale price.
+The best linear association with `SalePrice` is given by `OverallQual` factor, followed by everything else that has to do with *quality* ratings. 
+
+Here, the highest collinearity is showed between `PoolQC` and the new `ExistPool` variables. This is because they share a majority ammount of "None" and "No" values respectivelly in the exact same positions, therefore making the information redundant. In case of one-hot enconding there would be two repeated colums.
+
+Overall, one can see clearly the **multicollinearity** clusters, which suggest the use of advance **Feature Selection** techniques.
+
+### Visual Exploration
+
+Now with the previous information in hand, I'm going to visualise separatelly the two most important quasi-linear relationsships: `GrLivArea` and `OverallQual` vs. `SalePrice`.
+
+```{r}
+#| label: fig-cont_linear
+#| message: false
+#| warning: false
+#| column: body
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: 'GrvLivArea Vs. SalePrice - The most "linear" realationship between continuous variables.'
+#| fig-subcap: 
+#|   - "Scatter Plot"
+#|   - "Hexbin Plot"
+#| layout-ncol: 2
+
+ames_all |>
+  filter(dataset == "train") |>
+  ggplot(aes(x = GrLivArea, y = SalePrice/1000, color = OverallQual)) +  
+  scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +  
+  labs(x = expression("Ground Living Area ["~ft^2~"]"), 
+       y = "Sale Price\n['000 $]") +  
+  geom_point(alpha = 0.5) + theme(axis.text.y = element_blank()) +
+  theme(legend.position = "bottom")
+
+# install.packages("hexbin")
+ames_all |>
+  filter(dataset == "train") |>
+  ggplot(aes(x = GrLivArea, y = SalePrice/1000)) +  
+  scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +    
+  geom_hex(bins = 35, colour = "seagreen") + 
+  labs(x = expression("Ground Living Area ["~ft^2~"]")) +    
+  theme(axis.title.y = element_blank(), legend.position = "bottom")
+
+```
+
+The hexbin plot reveals three cells of price and size where houses are more common in the training dataset. **There are more than 50 houses for each bin in the range of 130K, 140K and 180K USD** aproximately.
+
+Furthermore, This visual allows me to *remove outliers*, i.e., the biggest and cheap houses (right data points).
+
+```{r}
+#| label: RmOutliers
+
+ames_all |>
+  select(c(SalePrice, GrLivArea, OverallQual, YrSold)) |>
+  filter(GrLivArea > 4500) |>
+  glimpse()
+
+ames_all <- ames_all |> filter(GrLivArea < 4500)
+
+```
+
+The **three big houses above were like super offers!** Or did the housing bubble exploded?
+
+In the same fashion, I want to see the effect of the factor `OverallQual`.
+
+```{r}
+#| label: fig-cat_linear
+#| message: false
+#| warning: false
+#| fig-width: 7
+#| fig-height: 5
+#| fig-cap: 'OverallQual Vs. SalePrice - The most "linear" realationship with a categorical predictor.'
+
+# install.packages("ggrain")
+library(ggrain)
+
+ames_all |>
+  filter(dataset == "train") |>
+  ggplot(aes(x = SalePrice/1000, y = OverallQual, colour = OverallQual, fill = OverallQual)) +     
+  geom_rain(alpha = 0.5) +  
+  scale_x_continuous(breaks = seq(0, 800, 50)) +  
+  labs(x = "Sale Price ['000 $]", y = "Overall Quality")
+
+# ames_all |>
+#   filter(dataset == "train") |> 
+#   ggplot(aes(x = YrSold, y = SalePrice/1000)) +
+#   geom_rain(rain.side = 'r', alpha = 0.5) +
+#   #scale_y_continuous(breaks = seq(0, 800, 100), labels = scales::comma) +   
+#   labs(y = "Sale Price [$]", x = "Year\nSold") +
+#   coord_flip() + theme(legend.position = "none")
+
+
+```
 
 ### Analysis of the response variable: Sale Price
 
@@ -366,7 +458,7 @@ How well-behaved is the target? Let's see it:
 #| column: page-right
 #| fig-width: 6
 #| fig-height: 6
-#| fig-cap: "Response Analysis."
+#| fig-cap: "Analysis of the target variable."
 #| fig-subcap: 
 #|   - "Histogram"
 #|   - "Q-Q Plot"
@@ -458,7 +550,7 @@ ames_all |>
 
 ```
 
-... and it is, indeed. Well, except for the tails now it's normal at the core.
+... and it is, indeed. Well, except for the tails, now it's more normal-like at the core.
 
 **I will include the *transformation of the response* as a step within a recipe in the modelling phase.**
 
@@ -466,7 +558,7 @@ ames_all |>
 
 &emsp; *"This is where the fun begins."*  – H. Solo
 
-One of the motivations to develop this project is because I'm switching to the **Tidymodels** package. Therefore it's time to load the library to train a simple reference model.
+One of the motivations to develop this project is because I'm switching to the **Tidymodels** framework. Therefore, it's time to load the library to train a simple reference model.
 
 ## Reference Model
 
