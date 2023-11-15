@@ -1,6 +1,6 @@
 ---
 title: "Prediction of House Prices in Ames"
-subtitle: "My commented and visual walk-through advance regression techniques." # only for html output
+subtitle: "A commented and visual walk-through advance regression techniques." # only for html output
 author: "Jorge A. Thomas"
 date: "`r Sys.Date()`"
 format:    
@@ -39,7 +39,7 @@ Ames, Iowa - USA.
 
 # Introduction
 
-In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] you'll follow my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics. I'll be feeding some tips along the analysis.
+In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] you'll follow my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics. I'll be feeding some tips on the right margin along the analysis.
 
 The Ames House dataset was prepared to improve on the older classic Boston Houses dataset and, given its open competition nature, it comprises two files:
 
@@ -58,7 +58,7 @@ I will keep updating this notebook, making improvements and reporting the rank o
 I checked beforehands that there are no missing values, here `NA`, in the target variable `SalePrice`. 
 Therefore, I will write a pipeline to read and concatenate both datasets (bind rows), adding and extra column `dataset` to label as "train" and "test" for further easy splitting[^1] (subset or filter).
 
-[^1]: Tip: The whole Feature Transformation pipeline most be always the same for all predictors in both datasets.
+[^1]: The whole Feature Transformation pipeline most be always the same for all predictors in both datasets.
 
 ```{r}
 #| label: Load Data
@@ -99,7 +99,7 @@ First things first, read the full [data description](https://www.kaggle.com/comp
 
 Therefore, I will fill the empty `NA` fields of the indicated columns of both datasets with the string *"None"*.
 
-[^2]: Tip: **print a copy**, make notes and study it. This is the first step to get into domain knowledge, in this case Real Estate, for later *Feature Engineering*.
+[^2]: **Print a copy**, make notes and study it. This is the first step to get into domain knowledge, in this case Real Estate, for later *Feature Engineering*.
 
 ```{r}
 #| label: easy replace_na
@@ -120,7 +120,7 @@ ames_all <- ames_all |>
 One of the early and recurrent steps of the EDA is to check the **completeness of data**. Let's search for missing values, after filling indicated fields[^3]. 
 For this case I wrote the function `count_na()` that generates the table displayed on the right margin.
 
-[^3]: Tip: **write a function to quantify missing values** depending on the language and labelling system used. 
+[^3]: **Write a function to quantify missing values** depending on the language and labelling system used. 
 
 ```{r}
 #| label: Counting NAs
@@ -196,7 +196,7 @@ Think about the next *modelling phase*, where you want to reduce features, e.g.,
 
 In this part I will establish which variables are categorical and numerical; this is not always as obvious as it seems[^4].
 
-[^4]: Tip: integer variables like calendar *Years* can be treated as categories for the analysis.
+[^4]: Integer variables like calendar *Years* can be treated as categories for the analysis.
 
 The first easy thing that comes to mind is to add the **total area of the property** as a new column named `TotAreaSF`; SF means *Squared Feet*.
 
@@ -314,7 +314,7 @@ Although **nothing is linear**, is good to have an idea of simple correlations b
 #| label: fig-num-corr
 #| fig-width: 8
 #| fig-height: 8
-#| fig-cap: Pearson's correlation of numeric features and response.
+#| fig-cap: Pearson's correlation of numeric features and response. High multicollinearity.
 #| cap-location: margin
 #| warning: false
 #| message: false
@@ -373,6 +373,7 @@ Now with the previous information in hand, I'm going to visualise separatelly th
 #| fig-width: 6
 #| fig-height: 6
 #| fig-cap: 'GrvLivArea Vs. SalePrice - The most "linear" realationship between continuous variables.'
+#| cap-location: margin
 #| fig-subcap: 
 #|   - "Scatter Plot"
 #|   - "Hexbin Plot"
@@ -423,42 +424,57 @@ In the same fashion, I want to see the effect of the factor `OverallQual`.
 #| message: false
 #| warning: false
 #| fig-width: 7
-#| fig-height: 5
-#| fig-cap: 'OverallQual Vs. SalePrice - The most "linear" realationship with a categorical predictor.'
+#| fig-height: 8
+#| fig-cap: 'OverallQual Vs. SalePrice - The most "linear" realationship with a categorical predictor. Variances of the factors are different.'
+#| cap-location: margin
 
 # install.packages("ggrain")
 library(ggrain)
 
 ames_all |>
   filter(dataset == "train") |>
-  ggplot(aes(x = SalePrice/1000, y = OverallQual, colour = OverallQual, fill = OverallQual)) +     
-  geom_rain(alpha = 0.5) +  
-  scale_x_continuous(breaks = seq(0, 800, 50)) +  
-  labs(x = "Sale Price ['000 $]", y = "Overall Quality")
-
-# ames_all |>
-#   filter(dataset == "train") |> 
-#   ggplot(aes(x = YrSold, y = SalePrice/1000)) +
-#   geom_rain(rain.side = 'r', alpha = 0.5) +
-#   #scale_y_continuous(breaks = seq(0, 800, 100), labels = scales::comma) +   
-#   labs(y = "Sale Price [$]", x = "Year\nSold") +
-#   coord_flip() + theme(legend.position = "none")
-
+  ggplot(aes(x = OverallQual, y = SalePrice/1000, colour = OverallQual, fill = OverallQual)) +     
+  geom_rain(alpha = 0.3) +  
+  scale_y_continuous(breaks = seq(0, 800, 100)) +  
+  labs(x = "Overall Quality", y = "Sale Price ['000 $]") +
+  coord_flip() + 
+  theme(legend.position = "none")
 
 ```
 
+I'm wondering in which price range is the most popular quality?
+
+```{r}
+#| label: fig-count_overallQual
+#| cap-location: margin
+#| fig-cap: "Houses with mid-quality levels are most frequent in the train dataset."
+#| column: margin
+#| code-fold: false
+
+ames_all |>
+  filter(dataset == "train") |>
+  count(OverallQual, name = "count") |>
+  ggplot(aes(y = fct_reorder(OverallQual, count), x = count, fill = OverallQual)) + 
+  geom_col() +
+  labs(y = "Overall\nQuality") + 
+  theme(legend.position = "none")
+```
+
+It seems that most  popular houses, with an overall qualilty of 5 (mid-quality level), are the ones between 120K and 145K USD. Of course, this was back in the years of 2006 - 2010.
+
 ### Analysis of the response variable: Sale Price
 
-How well-behaved is the target? Let's see it:
+How well-behaved is the target?
 
 ```{r}
 #| label: fig-Y
 #| message: false
 #| warning: false
-#| column: page-right
+#| column: body
 #| fig-width: 6
 #| fig-height: 6
-#| fig-cap: "Analysis of the target variable."
+#| fig-cap: "Analysis of the target variable. All the assumptions of OLS and linear regression are broken, as usual."
+#| cap-location: margin
 #| fig-subcap: 
 #|   - "Histogram"
 #|   - "Q-Q Plot"
@@ -486,19 +502,19 @@ The target variable (Y) is clearly not well-bahaved; it shows a log-normal distr
 
 #### Transformation of the response
 
-In my experience, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time **Log-normal**. 
-Rarely is something free, so you don't have zeros; think about the top 1% of reach people, or anything that becomes exotic or **premium** the higher the ammount of money is involved. These are long and sparsed tails.
+For what I've seen, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time **Log-normal**. 
+Rarely is something free, so you don't have zeros; think about the top 1% of reach people, or anything that becomes **premium** the higher the price. These are long and sparsed tails.
 
 The moment the first data transformation is performed, we start to loose interpretability very quickly. 
 Nowadays, the most accurate predictions need more than one transformation in order to work best[^5]. 
 
-[^5]: Tip: Forget about lineaerity and interpretability if you want the most accurate results.  
+[^5]: Forget about lineaerity and interpretability if you want the most accurate results.  
 
-The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^6], making the distribution of the values more normal-like.
+The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^6], making the distribution more normal-like.
 
-[^6]: Tip: think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
+[^6]: Think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
 
-However, because we have a computer and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of transformations (functions) that includes the logarithmic one.
+However, because we have a computer and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of transformations (functions) that include the logarithmic one.
 
 ```{r}
 #| label: fig-boxcox
@@ -520,16 +536,17 @@ ames_all <- ames_all |>
 
 ```
 
-The new `SalePrice_bc` should be better behaved...
+The new column `SalePrice_bc` should be better behaved...
 
 ```{r}
 #| label: fig-Y-trans
 #| message: false
 #| warning: false
-#| column: page-right
+#| column: body
 #| fig-width: 6
 #| fig-height: 6
 #| fig-cap: "Transformed Response."
+#| cap-location: margin
 #| fig-subcap: 
 #|   - "Histogram"
 #|   - "Q-Q Plot"
@@ -550,13 +567,13 @@ ames_all |>
 
 ```
 
-... and it is, indeed. Well, except for the tails, now it's more normal-like at the core.
+... and it is, indeed. Well, except for the tails, now the transformed values are more normal-like at the core.
 
 **I will include the *transformation of the response* as a step within a recipe in the modelling phase.**
 
 # PHASE 2: MODELLING
 
-&emsp; *"This is where the fun begins."*  – H. Solo
+&emsp; *"This is where the fun begins."* 
 
 One of the motivations to develop this project is because I'm switching to the **Tidymodels** framework. Therefore, it's time to load the library to train a simple reference model.
 
@@ -565,7 +582,7 @@ One of the motivations to develop this project is because I'm switching to the *
 ```{r}
 #| label: modelling
 
-
+# install.packages("tidymodels")
 
 
 
@@ -573,26 +590,7 @@ One of the motivations to develop this project is because I'm switching to the *
 
 ## Model Selection
 
-## Margin Figures
 
-Images and graphics play an integral role in Tufte's work. To place figures in the margin you can use the **Quarto** chunk option `column: margin`. For example:
-
-```{r}
-#| label: fig-margin
-#| fig-cap: "MPG vs horsepower, colored by transmission."
-#| column: margin
-#| message: false
-library(ggplot2)
-mtcars2 <- mtcars
-mtcars2$am <- factor(
-  mtcars$am, labels = c('automatic', 'manual')
-)
-ggplot(mtcars2, aes(hp, mpg, color = am)) +
-  geom_point() + geom_smooth() +
-  theme(legend.position = 'bottom')
-```
-
-Note the use of the `fig-cap` chunk option to provide a figure caption. You can adjust the proportions of figures using the `fig-width` and `fig-height` chunk options. These are specified in inches, and will be automatically scaled down to fit within the handout margin.
 
 ## Arbitrary Margin Content
 
@@ -664,33 +662,12 @@ One of the most prominent and distinctive features of this style is the extensiv
 
 [This is a span that has the class `column-margin` which places it in the margin without the sidenote mark.]{.column-margin} If you'd like to place ancillary information in the margin without the sidenote mark (the superscript number), you can use apply the `column-margin` class to the element.
 
-# References
-
 References can be displayed as margin notes for HTML output. For example, we can cite R here [@R-base].
 
 ::: {.callout-note appearance="simple"}
 This feature depends upon `link-citations` to locate and place references in the margin. This is enabled by default, but if you disable `link-citations` then references in the HTML output will be placed at the end of the output document as they normally are.
 :::
 
-# Responsiveness
-
-The HTML page layout is responsive- as the page width shrinks, elements will automatically adjust their position. Elements that appear in the margins will move inline with the content and elements that span the body and margin will automatically span only the body.
-
-# More Examples
-
-The rest of this document consists of a few test cases to make sure everything still works well in slightly more complicated scenarios. First we generate two plots in one figure environment with the chunk option `fig-show: hold`:
-
-```{r}
-#| label: fig-two-together
-#| fig-cap: "Two plots in one figure environment."
-#| fig-show: hold
-#| warning: false
-#| cap-location: margin
-p <- ggplot(mtcars2, aes(hp, mpg, color = am)) +
-  geom_point()
-p
-p + geom_smooth()
-```
 
 Then two plots in separate figure environments (the code is identical to the previous code chunk, but the chunk option is the default `fig-show: asis` now):
 
@@ -705,74 +682,6 @@ You may have noticed that the two figures have different captions, and that is b
 If you wish to use raw R expressions as part of the chunk options (like above), then you need to define those in the `tag=value` format within the curly brackets `{r label, tag=value}` instead of the `tag: value` YAML syntax on a new line starting with the hashpipe `#|`. The former approach is documented on [knitr's website](https://yihui.org/knitr/options/) while the latter is explained in [Quarto's documentation](https://quarto.org/docs/reference/cells/cells-knitr.html).
 :::
 
-Next we show multiple plots in margin figures. Similarly, two plots in the same figure environment in the margin:
-
-```{r}
-#| label: fig-margin-together
-#| fig-cap: "Two plots in one figure environment in the margin."
-#| fig-width: 3.5
-#| fig-height: 2
-#| fig-show: hold
-#| column: margin
-#| warning: false
-#| echo: false
-p
-p + geom_smooth(method = 'lm')
-```
-
-Then two plots from the same code chunk placed in different figure environments:
-
-```{r}
-#| echo: false
-knitr::kable(head(iris[,c(1,2,3,4)], 13))
-```
-
-```{r}
-#| label: fig-margin-separate-a
-#| fig-cap: "Two plots in separate figure environments in the margin"
-#| fig-width: 3.5
-#| fig-height: 2
-#| column: margin
-#| warning: false
-#| echo: false
-p
-p + geom_smooth(method = 'lm')
-```
-
-```{r}
-#| echo: false
-knitr::kable(head(iris[,c(1,2,3,4)], 11))
-```
-
-We blended some tables in the above code chunk only as *placeholders* to make sure there is enough vertical space among the margin figures, otherwise they will be stacked tightly together. For a practical document, you should not insert too many margin figures consecutively and make the margin crowded.
-
-You do not have to assign captions to figures. We show three figures with no captions below in the margin, in the main column, and in full width, respectively.
-
-```{r}
-#| fig-width: 3.5
-#| fig-height: 2
-#| column: margin
-# a boxplot of weight vs transmission; this figure
-# will be placed in the margin
-ggplot(mtcars2, aes(am, wt)) + geom_boxplot() +
-  coord_flip()
-```
-
-```{r}
-#| warning: false
-# a figure in the main column
-p <- ggplot(mtcars, aes(wt, hp)) + geom_point()
-p
-```
-
-```{r}
-#| fig-width: 11
-#| fig-height: 4
-#| column: page-right
-#| warning: false
-# a fullwidth figure
-p + geom_smooth(method = 'lm') + facet_grid(~ gear)
-```
 
 # Some Notes on Page Layout
 
