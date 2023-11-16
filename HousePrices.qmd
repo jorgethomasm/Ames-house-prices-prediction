@@ -25,7 +25,7 @@ bibliography: HousePrices.bib
 #| echo: false
 
 library(tidyverse) # ETL and EDA tools
-source("./tools/jthom_functions.r")
+source("./tools/jthomfuncs.r")
 theme_set(jthom_ggtheme)
 ```
 
@@ -43,7 +43,7 @@ In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] yo
 
 The Ames House dataset was prepared to improve on the older classic Boston Houses dataset and, given its open competition nature, it comprises two files:
 
-1. One file contains features and labels (or what's the same predictors and response). Here this is the *training dataset*. It's all I have to split the *Data Budget*.
+1. One file contains features and labels or what's the same predictors and responses. Here this is the *training dataset*. It's all I have to split the ***Data Budget***.
 
 2. Another file contains only features (predictors) to make predictions for the final submissions. Here this is the *test dataset*.
 
@@ -404,7 +404,7 @@ The hexbin plot reveals three cells of price and size where houses are more comm
 Furthermore, This visual allows me to *remove outliers*, i.e., the biggest and cheap houses (right data points).
 
 ```{r}
-#| label: RmOutliers
+#| label: RemoveOutliers
 
 ames_all |>
   select(c(SalePrice, GrLivArea, OverallQual, YrSold)) |>
@@ -498,27 +498,32 @@ ames_all |>
 
 ```
 
-The target variable (Y) is clearly not well-bahaved; it shows a log-normal distribution heavily skewed to right. In order to achieve better predictions, a transformation will be needed.
+Clearly, the target variable (Y) is not well-bahaved. It shows a log-normal distribution heavily skewed, to right of course. In order to achieve better predictions, a transformation might be needed.
 
 #### Transformation of the response
 
 For what I've seen, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time **Log-normal**. 
-Rarely is something free, so you don't have zeros; think about the top 1% of reach people, or anything that becomes **premium** the higher the price. These are long and sparsed tails.
+Rarely there is something free, so you don't have zeros or with negativ value; think about the top 1% of reach people, or anything that becomes **premium** the higher the price. These are long and sparsed right tails.
 
-The moment the first data transformation is performed, we start to loose interpretability very quickly. 
-Nowadays, the most accurate predictions need more than one transformation in order to work best[^5]. 
+The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^5], making the distribution more normal-like.
 
-[^5]: Forget about lineaerity and interpretability if you want the most accurate results.  
+[^5]: Think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
 
-The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^6], making the distribution more normal-like.
+Nevertheless, the moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best[^6]. 
 
-[^6]: Think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
+[^6]: Forget about linearity and interpretability if you want the most accurate results.  
 
-However, because we have a computer and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of transformations (functions) that include the logarithmic one.
+Because we have powerful computers and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of functions that includes the logarithmic one depending on the value of a parameter *lambda*. This parameter is automatically assessed.
+
+::: column-margin
+*Box-Cox transformations*:
+
+$y(\lambda) = \begin{cases} \frac{y^{-1}-1}{\lambda}, & \text{if } \lambda \neq 0 \\ \log y, & \text{if } \lambda = 0 \end{cases}$
+:::
 
 ```{r}
 #| label: fig-boxcox
-#| fig-cap: "Best parameter lambda near 0. Almost a pure logarithmic transformation."
+#| fig-cap: "Best parameter lambda = -0.05050505. It is almost a pure logarithmic transformation."
 #| column: margin
 #| code-fold: false
 #| warning: false
@@ -577,30 +582,71 @@ ames_all |>
 
 One of the motivations to develop this project is because I'm switching to the **Tidymodels** framework. Therefore, it's time to load the library to train a simple reference model.
 
-## Reference Model
+## Choosing Resampling Technique
+Depending on the chosen resample technique to estimate the goodness of fit (test error)
+Take a look at the pristine explanation by [@resamplingML].
+
+- **Simple validation?** 1 train fold and 1 test fold: NO, it's old and innacurate.
+- **10-folds Cross-Validation?** Analysis (training folds), Assessment (validation folds) and test: it's *small data*, I can choose something even more powerful.
+- **Bootstrap Sampling?** YES.
+
+By today's standards this dataset is small, therefore I will choose Bootstraping (CV on steroids!) to keep the assessment set the same size as the original training set. Although performance metrics will be slightly conservative or pesimistic, I prefer it.
+
+## Expending the Data Budget
 
 ```{r}
-#| label: modelling
+#| label: Data Budget
 
-# install.packages("tidymodels")
 
 
 
 ```
 
+
+## Reference Model
+
+```{r}
+#| label: modelling
+#| warning: false
+#| message: false
+
+# install.packages("tidymodels")
+library(tidymodels)
+tidymodels_prefer()
+
+# conflicted::conflicts_prefer(scales::discard)
+
+ames_train <- ames_all |>
+  filter(dataset == "train")
+
+model_lm <-  linear_reg() |>
+  set_engine("lm") |>
+  set_mode("regression") |>
+  fit(SalePrice ~ GrLivArea, data = ames_train)
+
+
+
+# Modern DS is a mixed territory. That's what make it so effective and with rapid advances
+# Every knowledge domain claiming the right terminology
+# Goodness of prediction (test )
+# Goodness of fit - seen data (train )  not realistic metric here 
+
+```
+
 ## Model Selection
 
+```{r}
+#| label: Resampling
 
 
-## Arbitrary Margin Content
+# Effective Resampling for Machine Learning in Tidymodels {rsample} R package reviews
+# https://www.youtube.com/watch?v=GtAX7Y2F4aY
 
-You can include anything in the margin by places the class `.column-margin` on the element. See an example on the right about the first fundamental theorem of calculus.
 
-::: column-margin
-We know from *the first fundamental theorem of calculus* that for $x$ in $[a, b]$:
 
-$$\frac{d}{dx}\left( \int_{a}^{x} f(u)\,du\right)=f(x).$$
-:::
+
+
+```
 
 ## Full Width Figures
 

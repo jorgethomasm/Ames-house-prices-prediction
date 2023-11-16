@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Jorge A. Thomas">
-<meta name="dcterms.date" content="2023-11-15">
+<meta name="dcterms.date" content="2023-11-16">
 
 <title>Prediction of House Prices in Ames</title>
 <style>
@@ -4632,7 +4632,7 @@ return!"\t\n\x0B\f\r                　\u2028\u2029
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 15, 2023</p>
+      <p class="date">November 16, 2023</p>
     </div>
   </div>
   
@@ -4670,7 +4670,7 @@ return!"\t\n\x0B\f\r                　\u2028\u2029
 <p>In this classic Kaggle dataset <span class="citation" data-cites="house-prices-advanced-regression-techniques">(<a href="#ref-house-prices-advanced-regression-techniques" role="doc-biblioref">Anna Montoya 2016</a>)</span> you’ll follow my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics. I’ll be feeding some tips on the right margin along the analysis.</p>
 <p>The Ames House dataset was prepared to improve on the older classic Boston Houses dataset and, given its open competition nature, it comprises two files:</p>
 <ol type="1">
-<li><p>One file contains features and labels (or what’s the same predictors and response). Here this is the <em>training dataset</em>. It’s all I have to split the <em>Data Budget</em>.</p></li>
+<li><p>One file contains features and labels or what’s the same predictors and responses. Here this is the <em>training dataset</em>. It’s all I have to split the <strong><em>Data Budget</em></strong>.</p></li>
 <li><p>Another file contains only features (predictors) to make predictions for the final submissions. Here this is the <em>test dataset</em>.</p></li>
 </ol>
 <p>The goal of the competition is to achieve minimum RMSE.</p>
@@ -5211,7 +5211,7 @@ return!"\t\n\x0B\f\r                　\u2028\u2029
 <details>
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: RmOutliers</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: RemoveOutliers</span></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>ames_all <span class="sc">|&gt;</span></span>
 <span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">c</span>(SalePrice, GrLivArea, OverallQual, YrSold)) <span class="sc">|&gt;</span></span>
@@ -5355,17 +5355,21 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 </figure>
 </div>
 </div>
-<p>The target variable (Y) is clearly not well-bahaved; it shows a log-normal distribution heavily skewed to right. In order to achieve better predictions, a transformation will be needed.</p>
+<p>Clearly, the target variable (Y) is not well-bahaved. It shows a log-normal distribution heavily skewed, to right of course. In order to achieve better predictions, a transformation might be needed.</p>
 <section id="transformation-of-the-response" class="level4 page-columns page-full">
 <h4 class="anchored" data-anchor-id="transformation-of-the-response">Transformation of the response</h4>
-<p>For what I’ve seen, processes that have to do with <em>money</em>, e.g., sale prices, costs of products, salaries, they are most of the time <strong>Log-normal</strong>. Rarely is something free, so you don’t have zeros; think about the top 1% of reach people, or anything that becomes <strong>premium</strong> the higher the price. These are long and sparsed tails.</p>
-<div class="page-columns page-full"><p>The moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>.</p><div class="no-row-height column-margin column-container"><li id="fn5"><p><sup>5</sup> Forget about lineaerity and interpretability if you want the most accurate results.</p></li></div></div>
-<div class="page-columns page-full"><p>The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>, making the distribution more normal-like.</p><div class="no-row-height column-margin column-container"><li id="fn6"><p><sup>6</sup> Think of a <strong>Logarithmic transformation</strong> like pressing an <strong>accordeon</strong> only from your right arm.</p></li></div></div>
-<p>However, because we have a computer and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of transformations (functions) that include the logarithmic one.</p>
-<div class="cell page-columns page-full">
+<p>For what I’ve seen, processes that have to do with <em>money</em>, e.g., sale prices, costs of products, salaries, they are most of the time <strong>Log-normal</strong>. Rarely there is something free, so you don’t have zeros or with negativ value; think about the top 1% of reach people, or anything that becomes <strong>premium</strong> the higher the price. These are long and sparsed right tails.</p>
+<div class="page-columns page-full"><p>The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>, making the distribution more normal-like.</p><div class="no-row-height column-margin column-container"><li id="fn5"><p><sup>5</sup> Think of a <strong>Logarithmic transformation</strong> like pressing an <strong>accordeon</strong> only from your right arm.</p></li></div></div>
+<div class="page-columns page-full"><p>Nevertheless, the moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>.</p><div class="no-row-height column-margin column-container"><li id="fn6"><p><sup>6</sup> Forget about linearity and interpretability if you want the most accurate results.</p></li></div></div>
+<p>Because we have powerful computers and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of functions that includes the logarithmic one depending on the value of a parameter <em>lambda</em>. This parameter is automatically assessed.</p>
+
+<div class="no-row-height column-margin column-container"><div class>
+<p><em>Box-Cox transformations</em>:</p>
+<p><span class="math inline">\(y(\lambda) = \begin{cases} \frac{y^{-1}-1}{\lambda}, &amp; \text{if } \lambda \neq 0 \\ \log y, &amp; \text{if } \lambda = 0 \end{cases}\)</span></p>
+</div></div><div class="cell page-columns page-full">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-boxcox</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &quot;Best parameter lambda near 0. Almost a pure logarithmic transformation.&quot;</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &quot;Best parameter lambda = -0.05050505. It is almost a pure logarithmic transformation.&quot;</span></span>
 <span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="co">#| column: margin</span></span>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-fold: false</span></span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="co">#| warning: false</span></span>
@@ -5386,7 +5390,7 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <div id="fig-boxcox" class="quarto-figure quarto-figure-center anchored">
 <figure class="figure">
 <p><img src="data:image/png;base64,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" class="img-fluid figure-img" width="672"></p>
-<figcaption class="figure-caption">Figure 8: Best parameter lambda near 0. Almost a pure logarithmic transformation.</figcaption>
+<figcaption class="figure-caption">Figure 8: Best parameter lambda = -0.05050505. It is almost a pure logarithmic transformation.</figcaption>
 </figure>
 </div>
 </div></div></div>
@@ -5456,6 +5460,19 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <h1>PHASE 2: MODELLING</h1>
 <p>  <em>“This is where the fun begins.”</em></p>
 <p>One of the motivations to develop this project is because I’m switching to the <strong>Tidymodels</strong> framework. Therefore, it’s time to load the library to train a simple reference model.</p>
+<section id="choosing-resampling-technique" class="level2">
+<h2 class="anchored" data-anchor-id="choosing-resampling-technique">Choosing Resampling Technique</h2>
+<p>Depending on the chosen resample technique to estimate the goodness of fit (test error) Take a look at the pristine explanation by <span class="citation" data-cites="resamplingML">(<a href="#ref-resamplingML" role="doc-biblioref">Zablotski 2022</a>)</span>.</p>
+<ul>
+<li><strong>Simple validation?</strong> 1 train fold and 1 test fold: NO, it’s old and innacurate.</li>
+<li><strong>10-folds Cross-Validation?</strong> Analysis (training folds), Assessment (validation folds) and test: it’s <em>small data</em>, I can choose something even more powerful.</li>
+<li><strong>Bootstrap Sampling?</strong> YES.</li>
+</ul>
+<p>By today’s standards this dataset is small, therefore I will choose Bootstraping (CV on steroids!) to keep the assessment set the same size as the original training set. Although performance metrics will be slightly conservative or pesimistic, I prefer it.</p>
+</section>
+<section id="expending-the-data-budget" class="level2">
+<h2 class="anchored" data-anchor-id="expending-the-data-budget">Expending the Data Budget</h2>
+</section>
 <section id="reference-model" class="level2">
 <h2 class="anchored" data-anchor-id="reference-model">Reference Model</h2>
 <div class="cell">
@@ -5463,39 +5480,63 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb20"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: modelling</span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(&quot;tidymodels&quot;)</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| warning: false</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co">#| message: false</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(&quot;tidymodels&quot;)</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidymodels)</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="fu">tidymodels_prefer</span>()</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a><span class="co"># conflicted::conflicts_prefer(scales::discard)</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>ames_train <span class="ot">&lt;-</span> ames_all <span class="sc">|&gt;</span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(dataset <span class="sc">==</span> <span class="st">&quot;train&quot;</span>)</span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>model_lm <span class="ot">&lt;-</span>  <span class="fu">linear_reg</span>() <span class="sc">|&gt;</span></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">&quot;lm&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">&quot;regression&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(SalePrice <span class="sc">~</span> GrLivArea, <span class="at">data =</span> ames_train)</span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Modern DS is a mixed territory. That&#39;s what make it so effective and with rapid advances</span></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Every knowledge domain claiming the right terminology</span></span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a><span class="co"># Goodness of prediction (test )</span></span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Goodness of fit - seen data (train )  not realistic metric here </span></span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
 <section id="model-selection" class="level2">
 <h2 class="anchored" data-anchor-id="model-selection">Model Selection</h2>
+<div class="cell">
+<details>
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: Resampling</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Effective Resampling for Machine Learning in Tidymodels {rsample} R package reviews</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="co"># https://www.youtube.com/watch?v=GtAX7Y2F4aY</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
 </section>
-<section id="arbitrary-margin-content" class="level2 page-columns page-full">
-<h2 class="anchored" data-anchor-id="arbitrary-margin-content">Arbitrary Margin Content</h2>
-<p>You can include anything in the margin by places the class <code>.column-margin</code> on the element. See an example on the right about the first fundamental theorem of calculus.</p>
-
-<div class="no-row-height column-margin column-container"><div class>
-<p>We know from <em>the first fundamental theorem of calculus</em> that for <span class="math inline">\(x\)</span> in <span class="math inline">\([a, b]\)</span>:</p>
-<p><span class="math display">\[\frac{d}{dx}\left( \int_{a}^{x} f(u)\,du\right)=f(x).\]</span></p>
-</div></div></section>
 <section id="full-width-figures" class="level2">
 <h2 class="anchored" data-anchor-id="full-width-figures">Full Width Figures</h2>
 <p>You can arrange for figures to span across the entire page by using the chunk option <code>fig-column: page-right</code>.</p>
 <div class="cell" data-fig-column="page-right">
 <details>
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-fullwidth</span></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &quot;A full width figure.&quot;</span></span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-width: 11</span></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 3</span></span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-column: page-right</span></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="co">#| warning: false</span></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(diamonds, <span class="fu">aes</span>(carat, price)) <span class="sc">+</span> <span class="fu">geom_smooth</span>() <span class="sc">+</span></span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_grid</span>(<span class="sc">~</span> cut)</span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-fullwidth</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &quot;A full width figure.&quot;</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-width: 11</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 3</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-column: page-right</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="co">#| warning: false</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(diamonds, <span class="fu">aes</span>(carat, price)) <span class="sc">+</span> <span class="fu">geom_smooth</span>() <span class="sc">+</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_grid</span>(<span class="sc">~</span> cut)</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div id="fig-fullwidth" class="quarto-figure quarto-figure-center anchored">
@@ -5511,9 +5552,9 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <section id="arbitrary-full-width-content" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="arbitrary-full-width-content">Arbitrary Full Width Content</h2>
 <p>Any content can span to the full width of the page, simply place the element in a <code>div</code> and add the class <code>column-page-right</code>. For example, the following code will display its contents as full width.</p>
-<div class="sourceCode" id="cb22"><pre class="sourceCode md code-with-copy"><code class="sourceCode markdown"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>::: {.fullwidth}</span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>Any _full width_ content here.</span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>:::</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb23"><pre class="sourceCode md code-with-copy"><code class="sourceCode markdown"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>::: {.fullwidth}</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>Any _full width_ content here.</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>:::</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>Below is an example:</p>
 <div class="column-page-right">
 <p><em>R is free software and comes with ABSOLUTELY NO WARRANTY.</em> You are welcome to redistribute it under the terms of the GNU General Public License versions 2 or 3. For more information about these matters see <a href="https://www.gnu.org/licenses/" class="uri">https://www.gnu.org/licenses/</a>.</p>
@@ -5525,11 +5566,11 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <div class="cell">
 <details>
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-main</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &quot;A figure in the main column.&quot;</span></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(diamonds, <span class="fu">aes</span>(cut, price)) <span class="sc">+</span> <span class="fu">geom_boxplot</span>()</span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-main</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &quot;A figure in the main column.&quot;</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(diamonds, <span class="fu">aes</span>(cut, price)) <span class="sc">+</span> <span class="fu">geom_boxplot</span>()</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div id="fig-main" class="quarto-figure quarto-figure-center anchored">
@@ -5547,12 +5588,12 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <div class="cell page-columns page-full">
 <details>
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-main-margin-cap</span></span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &quot;A figure with a longer caption. The figure appears in the main column, but the caption is placed in the margin. Captions can even contain elements like a citation such as @R-base.&quot;</span></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="co">#| cap-location: margin</span></span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(diamonds, <span class="fu">aes</span>(cut, price)) <span class="sc">+</span> <span class="fu">geom_boxplot</span>()</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-main-margin-cap</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &quot;A figure with a longer caption. The figure appears in the main column, but the caption is placed in the margin. Captions can even contain elements like a citation such as @R-base.&quot;</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="co">#| cap-location: margin</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(diamonds, <span class="fu">aes</span>(cut, price)) <span class="sc">+</span> <span class="fu">geom_boxplot</span>()</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display page-columns page-full">
 <div id="fig-main-margin-cap" class="quarto-figure quarto-figure-center anchored page-columns page-full">
@@ -5614,6 +5655,9 @@ Anna Montoya, DataCanary. 2016. <span>“House Prices - Advanced Regression Tech
 </div>
 <div id="ref-R-base" class="csl-entry" role="listitem">
 R Core Team. 2023. <em>R: A Language and Environment for Statistical Computing</em>. Vienna, Austria: R Foundation for Statistical Computing. <a href="https://www.R-project.org/">https://www.R-project.org/</a>.
+</div>
+<div id="ref-resamplingML" class="csl-entry" role="listitem">
+Zablotski, Yury. 2022. <em>Effective Resampling for Machine Learning in Tidymodels <span class="nocase">rsample</span> r Package Reviews</em>. <a href="https://www.youtube.com/watch?v=GtAX7Y2F4aY">https://www.youtube.com/watch?v=GtAX7Y2F4aY</a>.
 </div>
 </div></section></div></main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
