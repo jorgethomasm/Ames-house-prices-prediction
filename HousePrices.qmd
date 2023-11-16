@@ -372,7 +372,7 @@ Now with the previous information in hand, I'm going to visualise separatelly th
 #| column: body
 #| fig-width: 6
 #| fig-height: 6
-#| fig-cap: 'GrvLivArea Vs. SalePrice - The most "linear" realationship between continuous variables.'
+#| fig-cap: 'GrvLivArea Vs. SalePrice - The most "linear" realationship between continuous variables. One can clearly notice the increase of variance as both, Living Area and Price increase, i.e., heteroskedasticity.'
 #| cap-location: margin
 #| fig-subcap: 
 #|   - "Scatter Plot"
@@ -381,11 +381,12 @@ Now with the previous information in hand, I'm going to visualise separatelly th
 
 ames_all |>
   filter(dataset == "train") |>
-  ggplot(aes(x = GrLivArea, y = SalePrice/1000, color = OverallQual)) +  
+  ggplot(aes(x = GrLivArea, y = SalePrice/1000)) +  
   scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +  
   labs(x = expression("Ground Living Area ["~ft^2~"]"), 
        y = "Sale Price\n['000 $]") +  
-  geom_point(alpha = 0.5) + theme(axis.text.y = element_blank()) +
+  geom_point(aes(color = OverallQual), alpha = 0.5) + theme(axis.text.y = element_blank()) +
+  geom_smooth(method = "lm", formula =  y ~ splines::bs(x, 3), color = "black", size = 1.5, alpha = 0.5) +
   theme(legend.position = "bottom")
 
 # install.packages("hexbin")
@@ -401,7 +402,7 @@ ames_all |>
 
 The hexbin plot reveals three cells of price and size where houses are more common in the training dataset. **There are more than 50 houses for each bin in the range of 130K, 140K and 180K USD** aproximately.
 
-Furthermore, This visual allows me to *remove outliers*, i.e., the biggest and cheap houses (right data points).
+**Note how problematic are the outliers with the spline fit!** This visual allows me to *remove outliers*, i.e., the biggest and cheap houses (right data points).
 
 ```{r}
 #| label: RemoveOutliers
@@ -425,7 +426,7 @@ In the same fashion, I want to see the effect of the factor `OverallQual`.
 #| warning: false
 #| fig-width: 7
 #| fig-height: 8
-#| fig-cap: 'OverallQual Vs. SalePrice - The most "linear" realationship with a categorical predictor. Variances of the factors are different.'
+#| fig-cap: 'OverallQual Vs. SalePrice - The most "linear" realationship with a categorical predictor. The raincloud plot shows how variances of factors are very different.'
 #| cap-location: margin
 
 # install.packages("ggrain")
@@ -447,22 +448,42 @@ I'm wondering in which price range is the most popular quality?
 ```{r}
 #| label: fig-count_overallQual
 #| cap-location: margin
-#| fig-cap: "Houses with mid-quality levels are most frequent in the train dataset."
+#| fig-cap: "Houses with mid-quality levels are most frequent in the train dataset. I think I can reduce the categories to seven (8), grouping or lumping 1 and 2."
 #| column: margin
 #| code-fold: false
 
 ames_all |>
   filter(dataset == "train") |>
   count(OverallQual, name = "count") |>
-  ggplot(aes(y = fct_reorder(OverallQual, count), x = count, fill = OverallQual)) + 
-  geom_col() +
+  ggplot(aes(y = fct_reorder(OverallQual, count), x = count)) + 
+  geom_col(aes(fill = OverallQual)) +
+  geom_text(aes(label = count)) +
   labs(y = "Overall\nQuality") + 
   theme(legend.position = "none")
 ```
 
 It seems that most  popular houses, with an overall qualilty of 5 (mid-quality level), are the ones between 120K and 145K USD. Of course, this was back in the years of 2006 - 2010.
 
-### Analysis of the response variable: Sale Price
+Now I'll group (lump) into one category `OverallQual = 1` and `OverallQual = 2`.
+
+```{r}
+#| label: lumping
+
+ames_all <- ames_all |>
+  mutate(OverallQual = fct_lump(OverallQual, n = 8))
+
+# ames_all |>
+#   filter(dataset == "train") |>
+#   count(OverallQual, name = "count") |>
+#   ggplot(aes(y = fct_reorder(OverallQual, count), x = count)) + 
+#   geom_col(aes(fill = OverallQual)) +
+#   geom_text(aes(label = count)) +
+#   labs(y = "Overall\nQuality") + 
+#   theme(legend.position = "none")
+
+```
+
+### Analysis of response SalePrice
 
 How well-behaved is the target?
 
@@ -518,6 +539,8 @@ Because we have powerful computers and libraries with written functions to perfo
 ::: column-margin
 *Box-Cox transformations*:
 
+<br/>
+
 $y(\lambda) = \begin{cases} \frac{y^{-1}-1}{\lambda}, & \text{if } \lambda \neq 0 \\ \log y, & \text{if } \lambda = 0 \end{cases}$
 :::
 
@@ -529,7 +552,8 @@ $y(\lambda) = \begin{cases} \frac{y^{-1}-1}{\lambda}, & \text{if } \lambda \neq 
 #| warning: false
 #| message: false
 
-boxcox_trans <- MASS::boxcox(lm(SalePrice ~ 1, data = subset(ames_all, dataset == "train")), 
+boxcox_trans <- MASS::boxcox(lm(SalePrice ~ 1, 
+                                data = subset(ames_all, dataset == "train")), 
                              lambda = seq(-1, 1), 
                              plotit = TRUE)
 
@@ -569,7 +593,6 @@ ames_all |>
   stat_qq(color = "seagreen", alpha = 0.5) + 
   stat_qq_line(color = "seagreen") +   
   labs(y = "Sale Price\n[Box-Cox]", x = "Theoretical Quantiles (Norm. Dist.)")
-
 ```
 
 ... and it is, indeed. Well, except for the tails, now the transformed values are more normal-like at the core.
@@ -583,70 +606,167 @@ ames_all |>
 One of the motivations to develop this project is because I'm switching to the **Tidymodels** framework. Therefore, it's time to load the library to train a simple reference model.
 
 ## Choosing Resampling Technique
-Depending on the chosen resample technique to estimate the goodness of fit (test error)
+Depending on the chosen resample technique to estimate the Goodness-of-Fit (test error)
 Take a look at the pristine explanation by [@resamplingML].
 
 - **Simple validation?** 1 train fold and 1 test fold: NO, it's old and innacurate.
-- **10-folds Cross-Validation?** Analysis (training folds), Assessment (validation folds) and test: it's *small data*, I can choose something even more powerful.
+- **v-folds Cross-Validation?** Analysis (training folds), Assessment (validation folds) and test: it's *small data*, I can choose something even more powerful.
 - **Bootstrap Sampling?** YES.
 
-By today's standards this dataset is small, therefore I will choose Bootstraping (CV on steroids!) to keep the assessment set the same size as the original training set. Although performance metrics will be slightly conservative or pesimistic, I prefer it.
+By today's standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the *assessment set*. Although performance metrics will be slightly conservative or pesimistic, I prefer it.
 
-## Expending the Data Budget
+I will generate 1000 bootstrapped samples. 
+
+### Expending Data Budget
+
+Normally with v-fold CV I expend my data budget, but here doing resampling with replacement is kind of printing money... 
+
+Here's the code to generate the bootstraps and therefore split the data budget:
 
 ```{r}
-#| label: Data Budget
+#| label: DataBudget
+#| warning: false
+#| fold: false
 
+# install.packages("tidymodels")
+library(tidymodels)
+tidymodels_prefer()
+# conflicted::conflicts_prefer(scales::discard)
 
+# Select the pre-processed training dataset
+ames_train <- ames_all |> filter(dataset == "train")
+
+# v-folds CV repeated 10 times (v x 10 models)
+# ames_folds <- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # 10 folds are default
+
+# Generate 1000 bootstrapped samples
+set.seed(1982)
+ames_boots <- bootstraps(ames_train, times = 1000)
+ames_boots  
+```
+
+## Reference Models
+
+```{r}
+#| label: Recipes
+
+# ---- Base recipe ----
+base_recipe <-
+  recipe(SalePrice ~ GrLivArea + OverallQual, data = ames_train)
+
+# Recipe for trees  
+dummy_recipe <-
+  base_recipe |>
+  step_dummy(all_nominal_predictors())
+
+# Recipe for splines
+spline_recipe <-
+  dummy_recipe |>
+  step_bs(GrLivArea)
+```
+
+### Setting Models Specifications
+
+```{r}
+#| label: ModelsSpecs
+#| code-fold: false
+
+# install.packages(c("ranger", "ëarth"))
+
+# Model 1 Setup
+spec_lm <- 
+  linear_reg() |>
+  set_engine("lm") |>
+  set_mode("regression")
+
+# Model 2
+spec_rf <-
+  rand_forest(trees = 1000) |>
+  set_engine("ranger") |>
+  set_mode("regression")
+  
+# Model 3
+spec_mars <-
+  mars() |>
+  set_engine("earth") |>
+  set_mode("regression")
+  
+```
+
+### Defining a workflow set
+
+With a ***workflow set*** I can combine a list of pre-processors with a list of models:
+
+```{r}
+
+# Workflow set
+
+# Allows combine different pre-processors and models fit them all at once and compare results
+
+list_of_recipes <- list(base_recipe, dummy_recipe, spline_recipe)
+list_of_models <- list(spec_rf, spec_mars, spec_lm)
+
+ames_set <- 
+  workflow_set(
+    list_of_recipes, 
+    list_of_models, 
+    cross = FALSE, 
+    case_weights = NULL)
+
+ames_set
+```
+
+### Training with the Bootstrap samples
+
+```{r}
+#| label: GoF
+
+# install.packages("doParallel")
+
+# doParallel::registerDoParallel()
+# set.seed(1982)
+
+# ames_results <- workflow_map(ames_set, "fit_resamples", resamples = ames_boots)
+# ames_results
+
+# save(ames_results, file = "./models/ames_results_wf.Rdata")
+
+# ames_results <- load("./models/ames_results_wf.Rdata")
+
+```
+
+### Evaluating the workflow
+
+```{r}
+#| label: EvaluateResults
+
+# plt_res <- workflowsets::autoplot(ames_results)
+
+# plt_res
 
 
 ```
 
 
-## Reference Model
 
 ```{r}
-#| label: modelling
-#| warning: false
-#| message: false
-
-# install.packages("tidymodels")
-library(tidymodels)
-tidymodels_prefer()
-
-# conflicted::conflicts_prefer(scales::discard)
-
-ames_train <- ames_all |>
-  filter(dataset == "train")
-
-model_lm <-  linear_reg() |>
-  set_engine("lm") |>
-  set_mode("regression") |>
-  fit(SalePrice ~ GrLivArea, data = ames_train)
 
 
+# ames_wf <- workflow() |>
+#   add_model(spec_lm) |>
+#   add_formula(SalePrice ~ GrLivArea)
 
-# Modern DS is a mixed territory. That's what make it so effective and with rapid advances
-# Every knowledge domain claiming the right terminology
-# Goodness of prediction (test )
-# Goodness of fit - seen data (train )  not realistic metric here 
+# # Fit models to bootstrapped sets
+
+# trained_models <- fit_resamples(object = ames_wf, resamples = ames_boots)
+
+# # See estimated performance
+# trained_models |>  collect_metrics(summarize = TRUE) # TRUE gets Avg. performance 
 
 ```
 
 ## Model Selection
 
-```{r}
-#| label: Resampling
-
-
-# Effective Resampling for Machine Learning in Tidymodels {rsample} R package reviews
-# https://www.youtube.com/watch?v=GtAX7Y2F4aY
-
-
-
-
-
-```
 
 ## Full Width Figures
 
@@ -681,15 +801,6 @@ Below is an example:
 *R is free software and comes with ABSOLUTELY NO WARRANTY.* You are welcome to redistribute it under the terms of the GNU General Public License versions 2 or 3. For more information about these matters see <https://www.gnu.org/licenses/>.
 :::
 
-## Main Column Figures
-
-Besides margin and full width figures, you can of course also include figures constrained to the main column. This is the default type of figures in the LaTeX/HTML output.
-
-```{r}
-#| label: fig-main
-#| fig-cap: "A figure in the main column."
-ggplot(diamonds, aes(cut, price)) + geom_boxplot()
-```
 
 ## Margin Captions
 
@@ -703,8 +814,6 @@ ggplot(diamonds, aes(cut, price)) + geom_boxplot()
 ```
 
 # Sidenotes
-
-One of the most prominent and distinctive features of this style is the extensive use of sidenotes. There is a wide margin to provide ample room for sidenotes and small figures. Any use of a footnote will automatically be converted to a sidenote.
 
 [This is a span that has the class `column-margin` which places it in the margin without the sidenote mark.]{.column-margin} If you'd like to place ancillary information in the margin without the sidenote mark (the superscript number), you can use apply the `column-margin` class to the element.
 
