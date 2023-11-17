@@ -26,7 +26,7 @@ bibliography: HousePrices.bib
 
 library(tidyverse) # ETL and EDA tools
 source("./tools/jthomfuncs.r")
-theme_set(jthom_ggtheme)
+theme_set(jthomggtheme)
 ```
 
 ::: {#fig-intro layout-ncol=2}
@@ -85,13 +85,6 @@ names(ames_all)
 In order to organise my **Data Budget** I count on the **train dataset** with 1460 Observations of 79 predictors (one column is only an `Id` per house) and the Response, which is the `SalePrice` of the houses at the end of the list above.
 
 Note that `Id` and the just added `dataset` columns are not predictors. Hence, there are **79 features** to play  with. Also rememeber that the number of features for modelling will vary. Some will be discarded and some will be created along the analysis.
-
-I'll get rid of the `Id` column:
-```{r}
-#| label: Remove Id
-
-ames_all$Id <- NULL
-```
 
 ## Impute Missing Values
 
@@ -315,7 +308,6 @@ Although **nothing is linear**, is good to have an idea of simple correlations b
 #| fig-width: 8
 #| fig-height: 8
 #| fig-cap: Pearson's correlation of numeric features and response. High multicollinearity.
-#| cap-location: margin
 #| warning: false
 #| message: false
 
@@ -323,7 +315,7 @@ library(corrplot)
 
 ames_all |>
   filter(dataset == "train") |>
-  select(-dataset) |>
+  select(-c(dataset, Id)) |>
   select(where(is.numeric)) |>  
   cor(method = "pearson") |>
   corrplot(type = "lower", method = "circle", insig = 'blank', order = "hclust", diag = TRUE,
@@ -340,7 +332,6 @@ I'm leaving blank, i.e., without a circle, the insignificant correlations for be
 #| fig-width: 10
 #| fig-height: 10
 #| fig-cap: Pearson's correlation of categorical features and response.
-#| cap-location: margin
 #| warning: false
 #| message: false
 
@@ -384,7 +375,7 @@ ames_all |>
   ggplot(aes(x = GrLivArea, y = SalePrice/1000)) +  
   scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +  
   labs(x = expression("Ground Living Area ["~ft^2~"]"), 
-       y = "Sale Price\n['000 $]") +  
+       y = "Sale\nPrice\n['000 $]") +  
   geom_point(aes(color = OverallQual), alpha = 0.5) + theme(axis.text.y = element_blank()) +
   geom_smooth(method = "lm", formula =  y ~ splines::bs(x, 3), color = "black", size = 1.5, alpha = 0.5) +
   theme(legend.position = "bottom")
@@ -402,10 +393,12 @@ ames_all |>
 
 The hexbin plot reveals three cells of price and size where houses are more common in the training dataset. **There are more than 50 houses for each bin in the range of 130K, 140K and 180K USD** aproximately.
 
-**Note how problematic are the outliers with the spline fit!** This visual allows me to *remove outliers*, i.e., the biggest and cheap houses (right data points).
+On the other hand, note how **problematic are the outliers** with the spline fit! This visual allows me to *remove outliers*, i.e., the biggest and cheap houses (right data points).
 
 ```{r}
-#| label: RemoveOutliers
+#| label: fig-RemoveOutliers
+#| fig-cap: Removing three outliers the spline fit is dramatically improved!
+#| column: margin
 
 ames_all |>
   select(c(SalePrice, GrLivArea, OverallQual, YrSold)) |>
@@ -413,6 +406,20 @@ ames_all |>
   glimpse()
 
 ames_all <- ames_all |> filter(GrLivArea < 4500)
+
+ames_all |>
+  filter(dataset == "train") |>
+  ggplot(aes(x = GrLivArea, y = SalePrice/1000)) +  
+  scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +  
+  labs(x = expression("Ground Living Area ["~ft^2~"]"), 
+       y = "Sale Price ['000 $]") +  
+  geom_point(aes(color = OverallQual), alpha = 0.5) + theme(axis.text.y = element_blank()) +
+  geom_smooth(method = "lm", 
+              formula =  y ~ splines::bs(x, 3), 
+              color = "black", 
+              size = 1.5, 
+              alpha = 0.5) +
+  theme(legend.position = "none", axis.title.y = element_text(angle = 90))
 
 ```
 
@@ -427,7 +434,6 @@ In the same fashion, I want to see the effect of the factor `OverallQual`.
 #| fig-width: 7
 #| fig-height: 8
 #| fig-cap: 'OverallQual Vs. SalePrice - The most "linear" realationship with a categorical predictor. The raincloud plot shows how variances of factors are very different.'
-#| cap-location: margin
 
 # install.packages("ggrain")
 library(ggrain)
@@ -437,18 +443,18 @@ ames_all |>
   ggplot(aes(x = OverallQual, y = SalePrice/1000, colour = OverallQual, fill = OverallQual)) +     
   geom_rain(alpha = 0.3) +  
   scale_y_continuous(breaks = seq(0, 800, 100)) +  
-  labs(x = "Overall Quality", y = "Sale Price ['000 $]") +
+  labs(x = "Overall\nQuality", y = "Sale Price ['000 $]") +
   coord_flip() + 
   theme(legend.position = "none")
 
 ```
 
-I'm wondering in which price range is the most popular quality?
+#### I'm wondering in which price range is the most popular quality?
 
 ```{r}
 #| label: fig-count_overallQual
 #| cap-location: margin
-#| fig-cap: "Houses with mid-quality levels are most frequent in the train dataset. I think I can reduce the categories to seven (8), grouping or lumping 1 and 2."
+#| fig-cap: 'Houses with mid-quality levels are most frequent in the train dataset. I will reduce the categories to nine (9), grouping or lumping 1 and 2 as "Other".'
 #| column: margin
 #| code-fold: false
 
@@ -458,30 +464,51 @@ ames_all |>
   ggplot(aes(y = fct_reorder(OverallQual, count), x = count)) + 
   geom_col(aes(fill = OverallQual)) +
   geom_text(aes(label = count)) +
-  labs(y = "Overall\nQuality") + 
-  theme(legend.position = "none")
+  labs(y = "Overall Quality") + 
+  theme(legend.position = "none", axis.title.y = element_text(angle = 90))
 ```
 
 It seems that most  popular houses, with an overall qualilty of 5 (mid-quality level), are the ones between 120K and 145K USD. Of course, this was back in the years of 2006 - 2010.
 
-Now I'll group (lump) into one category `OverallQual = 1` and `OverallQual = 2`.
+Now I'll group or lump into one category `OverallQual = 1` and `OverallQual = 2`.
 
 ```{r}
 #| label: lumping
 
-ames_all <- ames_all |>
-  mutate(OverallQual = fct_lump(OverallQual, n = 8))
+ames_all <- 
+  ames_all |>
+  mutate(OverallQual = fct_lump(OverallQual, n = 8)) |>
+  mutate(OverallQual = fct_relevel(OverallQual, "Other")) 
+  
+```
 
-# ames_all |>
-#   filter(dataset == "train") |>
-#   count(OverallQual, name = "count") |>
-#   ggplot(aes(y = fct_reorder(OverallQual, count), x = count)) + 
-#   geom_col(aes(fill = OverallQual)) +
-#   geom_text(aes(label = count)) +
-#   labs(y = "Overall\nQuality") + 
-#   theme(legend.position = "none")
+#### How the sale price varies depending on the living area by house styles?
+
+```{r}
+#| label: fig-houseStyles
+#| fig-column: page-right
+#| fig-width: 8
+#| fig-height: 8
+#| fig-cap: "One and two story houses are the most common within the train dataset."
+
+ames_all |>
+  filter(dataset == "train") |>
+  ggplot(aes(x = GrLivArea, y = SalePrice/1000)) +  
+  scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +  
+  labs(x = expression("Ground Living Area ["~ft^2~"]"), 
+       y = "Sale\nPrice\n['000 $]") +  
+  geom_point(aes(color = OverallQual), alpha = 0.3) +
+  geom_smooth(method = "lm", 
+              formula =  y ~ splines::bs(x, 3), 
+              color = "black",
+              se = FALSE,
+              size = 0.7, 
+              alpha = 0.5) +
+  facet_wrap(~HouseStyle, nrow = 2) +
+  theme(legend.position = "bottom")
 
 ```
+
 
 ### Analysis of response SalePrice
 
@@ -495,7 +522,6 @@ How well-behaved is the target?
 #| fig-width: 6
 #| fig-height: 6
 #| fig-cap: "Analysis of the target variable. All the assumptions of OLS and linear regression are broken, as usual."
-#| cap-location: margin
 #| fig-subcap: 
 #|   - "Histogram"
 #|   - "Q-Q Plot"
@@ -514,7 +540,7 @@ ames_all |>
   stat_qq(color = "seagreen", alpha = 0.5) + 
   stat_qq_line(color = "seagreen") +  
   scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +
-  labs(y = "Sale Price\n['000 $]",
+  labs(y = "Sale\nPrice\n['000 $]",
        x = "Theoretical Quantiles (Norm. Dist.)")
 
 ```
@@ -574,8 +600,7 @@ The new column `SalePrice_bc` should be better behaved...
 #| column: body
 #| fig-width: 6
 #| fig-height: 6
-#| fig-cap: "Transformed Response."
-#| cap-location: margin
+#| fig-cap: "The transformed response shows a more bell-like shape."
 #| fig-subcap: 
 #|   - "Histogram"
 #|   - "Q-Q Plot"
@@ -592,7 +617,7 @@ ames_all |>
   ggplot(aes(sample = SalePrice_bc)) + 
   stat_qq(color = "seagreen", alpha = 0.5) + 
   stat_qq_line(color = "seagreen") +   
-  labs(y = "Sale Price\n[Box-Cox]", x = "Theoretical Quantiles (Norm. Dist.)")
+  labs(y = "Sale\nPrice\n[Box-Cox]", x = "Theoretical Quantiles (Norm. Dist.)")
 ```
 
 ... and it is, indeed. Well, except for the tails, now the transformed values are more normal-like at the core.
@@ -634,10 +659,13 @@ tidymodels_prefer()
 # conflicted::conflicts_prefer(scales::discard)
 
 # Select the pre-processed training dataset
-ames_train <- ames_all |> filter(dataset == "train")
+ames_train <- 
+  ames_all |> 
+  filter(dataset == "train") |>
+  select(-Id)
 
 # v-folds CV repeated 10 times (v x 10 models)
-# ames_folds <- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # 10 folds are default
+# ames_folds <- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # v = 10 folds are default
 
 # Generate 1000 bootstrapped samples
 set.seed(1982)
@@ -647,8 +675,16 @@ ames_boots
 
 ## Reference Models
 
+My final objective is to stack (combine or ensemble) several models of different nature at the end.
+
+However, for a first model I'd like to keep interpretability  and to involve all predictors in order to apply some regularisation given the problem of multicollinearity. 
+Hence, I'll go with a regularised (shrinkage) General Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
+
+The model will be the best of Lasso (L1) and Ridge (L2), i.e., Elastic-Net
+
+The following code shows preprocessing steps enclosed in a pipeline or **recipe**:
 ```{r}
-#| label: Recipes
+#| label: Preprocessing
 
 # ---- Base recipe ----
 base_recipe <-
@@ -836,8 +872,3 @@ You may have noticed that the two figures have different captions, and that is b
 ## Using R within Chunk Options
 If you wish to use raw R expressions as part of the chunk options (like above), then you need to define those in the `tag=value` format within the curly brackets `{r label, tag=value}` instead of the `tag: value` YAML syntax on a new line starting with the hashpipe `#|`. The former approach is documented on [knitr's website](https://yihui.org/knitr/options/) while the latter is explained in [Quarto's documentation](https://quarto.org/docs/reference/cells/cells-knitr.html).
 :::
-
-
-# Some Notes on Page Layout
-
-To see the Quarto markdown source of this example document, you may follow [this link to Github](https://raw.githubusercontent.com/quarto-dev/quarto-gallery/main/page-layout/tufte.qmd).

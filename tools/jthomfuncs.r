@@ -1,6 +1,6 @@
 # JT's functins:
 
-jthom_ggtheme <- theme_minimal() +
+jthomggtheme <- theme_minimal() +
   theme(
         plot.title = element_text(size = 14,
                                   hjust = 0.5),
