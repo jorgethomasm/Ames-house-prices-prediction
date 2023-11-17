@@ -247,9 +247,10 @@ ames_all <- ames_all |>
   mutate(IsRemodelled = factor(IsRemodelled, levels = c("No", "Yes"))) |>
   select(-YearRemodAdd) |> # Bye YearRemodAdd
 
-  # NEW ExistPool
-  mutate(ExistPool = if_else(PoolArea == 0, "No", "Yes")) |>
-  mutate(ExistPool = fct_relevel(ExistPool, "No", "Yes"))|>
+  # NEW ExistPool  
+  # mutate(ExistPool = if_else(PoolArea == 0, "No", "Yes")) |>
+  # mutate(ExistPool = fct_relevel(ExistPool, "No", "Yes"))|>
+  # a dummy of PoolQC and PoolArea will makes this Feat. redundant!
 
   # NEW ExistGarage
   mutate(ExistGarage = if_else(GarageArea == 0, "No", "Yes")) |>
@@ -292,6 +293,7 @@ ames_all <- ames_all |>
 # Low quality finished square feet (all floors)
 # Most of the values are 0 -> almost 0 variance. 
 ames_all$LowQualFinSF <- NULL
+ames_all$PoolArea <- NULL
 
 ```
 
@@ -662,14 +664,14 @@ tidymodels_prefer()
 ames_train <- 
   ames_all |> 
   filter(dataset == "train") |>
-  select(-Id)
+  select(-c(Id, dataset, SalePrice_bc))
 
 # v-folds CV repeated 10 times (v x 10 models)
 # ames_folds <- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # v = 10 folds are default
 
 # Generate 1000 bootstrapped samples
 set.seed(1982)
-ames_boots <- bootstraps(ames_train, times = 1000)
+ames_boots <- bootstraps(ames_train, times = 100)
 ames_boots  
 ```
 
@@ -678,17 +680,29 @@ ames_boots
 My final objective is to stack (combine or ensemble) several models of different nature at the end.
 
 However, for a first model I'd like to keep interpretability  and to involve all predictors in order to apply some regularisation given the problem of multicollinearity. 
-Hence, I'll go with a regularised (shrinkage) General Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
+Hence, I'll go with a regularised (shrinkage) Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
 
-The model will be the best of Lasso (L1) and Ridge (L2), i.e., Elastic-Net
+I'll choose Elastic net regression. Features must be scaled![^7]
 
-The following code shows preprocessing steps enclosed in a pipeline or **recipe**:
+[^7]: I don't want to over-penalised non-scaled variables using shrinkage methods.
+
+The following code shows preprocessing steps enclosed in a pipeline or **recipe**. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
+
+
 ```{r}
 #| label: Preprocessing
 
 # ---- Base recipe ----
 base_recipe <-
   recipe(SalePrice ~ GrLivArea + OverallQual, data = ames_train)
+
+shrinkage_recipe <-
+  recipe(SalePrice ~ ., data = ames_train) |>
+  step_BoxCox(SalePrice, limits = c(-1, 1)) |>  
+  step_scale(all_numeric_predictors()) |>
+  step_dummy(all_nominal_predictors()) |>  
+  step_zv(all_predictors())
+  
 
 # Recipe for trees  
 dummy_recipe <-
@@ -704,30 +718,75 @@ spline_recipe <-
 ### Setting Models Specifications
 
 ```{r}
-#| label: ModelsSpecs
+#| label: ElasticNetSpecs
 #| code-fold: false
 
-# install.packages(c("ranger", "ëarth"))
+# install.packages(c("ranger", "earth", "glmnet"))
 
-# Model 1 Setup
-spec_lm <- 
-  linear_reg() |>
-  set_engine("lm") |>
-  set_mode("regression")
+# Model 1: Elastic Net Regression
 
-# Model 2
-spec_rf <-
-  rand_forest(trees = 1000) |>
-  set_engine("ranger") |>
-  set_mode("regression")
-  
-# Model 3
-spec_mars <-
-  mars() |>
-  set_engine("earth") |>
-  set_mode("regression")
-  
+elnet_spec <-
+  linear_reg(penalty = tune(), mixture = tune()) |> # penalty = lambda; mixture = alpha
+  set_mode("regression") |>
+  set_engine("glmnet")
+
+
+elnet_grid <- expand_grid(penalty = seq(0, 100, by = 10),
+                          mixture = seq(0, 1, by = 0.2) )
+
+
+doParallel::registerDoParallel()
+set.seed(1982)
+
+elnet_tune_res <- tune_grid(elnet_spec, 
+                            preprocessor = shrinkage_recipe, 
+                            grid = elnet_grid, 
+                            resamples = ames_boots)
+
+elnet_tune_res |>
+  collect_metrics() |>
+  filter(.metric == "rmse") |>
+  arrange(mean)
+
+
+elnet_tune_res |>
+  collect_metrics() |>
+  filter(.metric == "rmse") |>
+  ggplot(aes(penalty, mean, color = factor(mixture), group = factor(mixture))) + 
+  geom_point() + 
+  geom_line() + 
+  labs(y = "RMSE")
+ 
 ```
+
+```{r}
+#| label: OtherModelsSpecs
+
+# linear_reg(mixture = .1) %>% 
+#   set_engine("glmnet") %>% 
+#   translate()
+
+
+# # Model 2 Setup
+# spec_lm <- 
+#   linear_reg() |>
+#   set_engine("lm") |>
+#   set_mode("regression")
+
+# # Model 3
+# spec_rf <-
+#   rand_forest(trees = 1000) |>
+#   set_engine("ranger") |>
+#   set_mode("regression")
+  
+# # Model 4
+# spec_mars <-
+#   mars() |>
+#   set_engine("earth") |>
+#   set_mode("regression")
+
+```
+
 
 ### Defining a workflow set
 
@@ -739,17 +798,17 @@ With a ***workflow set*** I can combine a list of pre-processors with a list of 
 
 # Allows combine different pre-processors and models fit them all at once and compare results
 
-list_of_recipes <- list(base_recipe, dummy_recipe, spline_recipe)
-list_of_models <- list(spec_rf, spec_mars, spec_lm)
+# list_of_recipes <- list(base_recipe, dummy_recipe, spline_recipe)
+# list_of_models <- list(spec_rf, spec_mars, spec_lm)
 
-ames_set <- 
-  workflow_set(
-    list_of_recipes, 
-    list_of_models, 
-    cross = FALSE, 
-    case_weights = NULL)
+# ames_set <- 
+#   workflow_set(
+#     list_of_recipes, 
+#     list_of_models, 
+#     cross = FALSE, 
+#     case_weights = NULL)
 
-ames_set
+# ames_set
 ```
 
 ### Training with the Bootstrap samples
