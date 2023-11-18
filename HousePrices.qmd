@@ -642,7 +642,7 @@ Take a look at the pristine explanation by [@resamplingML].
 
 By today's standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the *assessment set*. Although performance metrics will be slightly conservative or pesimistic, I prefer it.
 
-I will generate 1000 bootstrapped samples. 
+I will generate 300 bootstrap samples. 
 
 ### Expending Data Budget
 
@@ -671,7 +671,7 @@ ames_train <-
 
 # Generate 1000 bootstrapped samples
 set.seed(1982)
-ames_boots <- bootstraps(ames_train, times = 100)
+ames_boots <- bootstraps(ames_train, times = 300, strata = SalePrice)
 ames_boots  
 ```
 
@@ -693,8 +693,16 @@ The following code shows preprocessing steps enclosed in a pipeline or **recipe*
 #| label: Preprocessing
 
 # ---- Base recipe ----
-base_recipe <-
-  recipe(SalePrice ~ GrLivArea + OverallQual, data = ames_train)
+num_uni_lm_recipe <-
+  recipe(SalePrice ~ GrLivArea, data = ames_train)
+  #step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
+  #step_scale(all_numeric_predictors())
+
+num_mul_lm_recipe <-
+  recipe(SalePrice ~ GrLivArea + GarageCars, data = ames_train) 
+  #step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
+  #step_scale(all_numeric_predictors())
+
 
 shrinkage_recipe <-
   recipe(SalePrice ~ ., data = ames_train) |>
@@ -702,7 +710,12 @@ shrinkage_recipe <-
   step_scale(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors()) |>  
   step_zv(all_predictors())
-  
+
+shrinkage_spline_recipe <-
+  shrinkage_recipe |>
+  step_bs(all_numeric_predictors())  
+
+
 
 # Recipe for trees  
 dummy_recipe <-
@@ -723,13 +736,18 @@ spline_recipe <-
 
 # install.packages(c("ranger", "earth", "glmnet"))
 
-# Model 1: Elastic Net Regression
+# Linear Model
+lm_spec <- 
+  linear_reg() |>
+  set_mode("regression") |>
+  set_engine("lm")
 
+
+# Linear Model penalised
 elnet_spec <-
   linear_reg(penalty = tune(), mixture = tune()) |> # penalty = lambda; mixture = alpha
   set_mode("regression") |>
   set_engine("glmnet")
-
 
 elnet_grid <- expand_grid(penalty = seq(0, 100, by = 10),
                           mixture = seq(0, 1, by = 0.2) )
@@ -739,7 +757,7 @@ doParallel::registerDoParallel()
 set.seed(1982)
 
 elnet_tune_res <- tune_grid(elnet_spec, 
-                            preprocessor = shrinkage_recipe, 
+                            preprocessor = shrinkage_spline_recipe, 
                             grid = elnet_grid, 
                             resamples = ames_boots)
 
@@ -801,14 +819,17 @@ With a ***workflow set*** I can combine a list of pre-processors with a list of 
 # list_of_recipes <- list(base_recipe, dummy_recipe, spline_recipe)
 # list_of_models <- list(spec_rf, spec_mars, spec_lm)
 
-# ames_set <- 
-#   workflow_set(
-#     list_of_recipes, 
-#     list_of_models, 
-#     cross = FALSE, 
-#     case_weights = NULL)
+list_of_recipes <- list(num_uni_lm_recipe, num_mul_lm_recipe)
+list_of_models <- list(lm_spec)
 
-# ames_set
+ames_set <- 
+  workflow_set(
+    list_of_recipes, 
+    list_of_models, 
+    cross = TRUE, 
+    case_weights = NULL)
+
+ames_set
 ```
 
 ### Training with the Bootstrap samples
@@ -818,27 +839,20 @@ With a ***workflow set*** I can combine a list of pre-processors with a list of 
 
 # install.packages("doParallel")
 
-# doParallel::registerDoParallel()
-# set.seed(1982)
+doParallel::registerDoParallel()
+set.seed(1982)
 
-# ames_results <- workflow_map(ames_set, "fit_resamples", resamples = ames_boots)
-# ames_results
+ames_results <- workflow_map(ames_set, "fit_resamples", resamples = ames_boots)
+
+ames_results |>  
+  collect_metrics(summarize = TRUE) |>
+  filter(.metric == "rmse")
+
+
 
 # save(ames_results, file = "./models/ames_results_wf.Rdata")
 
 # ames_results <- load("./models/ames_results_wf.Rdata")
-
-```
-
-### Evaluating the workflow
-
-```{r}
-#| label: EvaluateResults
-
-# plt_res <- workflowsets::autoplot(ames_results)
-
-# plt_res
-
 
 ```
 
