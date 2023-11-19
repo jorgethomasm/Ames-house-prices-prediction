@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Jorge A. Thomas">
-<meta name="dcterms.date" content="2023-11-17">
+<meta name="dcterms.date" content="2023-11-19">
 
 <title>Prediction of House Prices in Ames</title>
 <style>
@@ -4632,7 +4632,7 @@ return!"\t\n\x0B\f\r                　\u2028\u2029
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 17, 2023</p>
+      <p class="date">November 19, 2023</p>
     </div>
   </div>
   
@@ -5432,7 +5432,7 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <p>Because we have powerful computers and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of functions that includes the logarithmic one depending on the value of a parameter <em>lambda</em>. This parameter is automatically assessed.</p>
 
 <div class="no-row-height column-margin column-container"><div class>
-<p><em>Box-Cox transformations</em>:</p>
+<p><em>Family Box-Cox transformations</em>:</p>
 <p><br></p>
 <p><span class="math inline">\(y(\lambda) = \begin{cases} \frac{y^{-1}-1}{\lambda}, &amp; \text{if } \lambda \neq 0 \\ \log y, &amp; \text{if } \lambda = 0 \end{cases}\)</span></p>
 </div></div><div class="cell page-columns page-full">
@@ -5529,20 +5529,19 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <h1>PHASE 2: MODELLING</h1>
 <p>  <em>“This is where the fun begins.”</em></p>
 <p>One of the motivations to develop this project is because I’m switching to the <strong>Tidymodels</strong> framework. Therefore, it’s time to load the library to train a simple reference model.</p>
-<section id="choosing-resampling-technique" class="level2">
-<h2 class="anchored" data-anchor-id="choosing-resampling-technique">Choosing Resampling Technique</h2>
-<p>Depending on the chosen resample technique to estimate the Goodness-of-Fit (test error) Take a look at the pristine explanation by <span class="citation" data-cites="resamplingML">(<a href="#ref-resamplingML" role="doc-biblioref">Zablotski 2022</a>)</span>.</p>
+<section id="resampling-technique-for-test-error-estimation" class="level2">
+<h2 class="anchored" data-anchor-id="resampling-technique-for-test-error-estimation">Resampling Technique for Test Error Estimation</h2>
+<p>This is a critical step for final model selection. Depending on the chosen resample technique to estimate the Goodness-of-Prediction or test error, in this case metrics like RMSE can be slightly optimistic or conservative. Take a look at the pristine explanation by <span class="citation" data-cites="resamplingML">(<a href="#ref-resamplingML" role="doc-biblioref">Zablotski 2022</a>)</span>.</p>
 <ul>
-<li><strong>Simple validation?</strong> 1 train fold and 1 test fold: NO, it’s old and innacurate.</li>
+<li><strong>Simple validation set?</strong> 1 train fold and 1 test fold: NO, it’s old and innacurate.</li>
 <li><strong>v-folds Cross-Validation?</strong> Analysis (training folds), Assessment (validation folds) and test: it’s <em>small data</em>, I can choose something even more powerful.</li>
-<li><strong>Bootstrap Sampling?</strong> YES.</li>
+<li><strong>The Bootstrap?</strong> YES.</li>
 </ul>
 <p>By today’s standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the <em>assessment set</em>. Although performance metrics will be slightly conservative or pesimistic, I prefer it.</p>
-<p>I will generate 1000 bootstrapped samples.</p>
-<section id="expending-data-budget" class="level3">
-<h3 class="anchored" data-anchor-id="expending-data-budget">Expending Data Budget</h3>
-<p>Normally with v-fold CV I expend my data budget, but here doing resampling with replacement is kind of printing money…</p>
-<p>Here’s the code to generate the bootstraps and therefore split the data budget:</p>
+<p>I will generate 1000 bootstrap-samples.</p>
+<section id="expending-the-data-budget" class="level3">
+<h3 class="anchored" data-anchor-id="expending-the-data-budget">Expending the data budget</h3>
+<p>Normally with v-fold CV I expend my data budget, but here doing resampling with replacement is kind of printing money… Here’s the code to generate the bootstraps and therefore split the data budget:</p>
 <div class="cell" data-fold="false">
 <details>
 <summary>Code</summary>
@@ -5560,228 +5559,297 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>ames_train <span class="ot">&lt;-</span> </span>
 <span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>  ames_all <span class="sc">|&gt;</span> </span>
 <span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(dataset <span class="sc">==</span> <span class="st">&quot;train&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span><span class="fu">c</span>(Id, dataset, SalePrice_bc))</span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>SalePrice_bc)</span>
 <span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a><span class="co"># v-folds CV repeated 10 times (v x 10 models)</span></span>
-<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_folds &lt;- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # v = 10 folds are default</span></span>
-<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Generate 1000 bootstrapped samples</span></span>
-<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1982</span>)</span>
-<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>ames_boots <span class="ot">&lt;-</span> <span class="fu">bootstraps</span>(ames_train, <span class="at">times =</span> <span class="dv">100</span>)</span>
-<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>ames_boots  </span>
-<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- v-folds Cross Validation ----</span></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a><span class="co"># v-folds CV repeated 10 times (v x 10 models)</span></span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a><span class="co"># set.seed(1982)</span></span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_folds &lt;- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # v = 10 folds are default</span></span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- The Bootstrap ----</span></span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1982</span>)</span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>ames_boots <span class="ot">&lt;-</span> <span class="fu">bootstraps</span>(ames_train, <span class="at">times =</span> <span class="dv">1000</span>, <span class="at">strata =</span> SalePrice)</span>
+<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>ames_boots  </span>
+<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 100 × 2
-   splits             id          
-   &lt;list&gt;             &lt;chr&gt;       
- 1 &lt;split [1458/547]&gt; Bootstrap001
- 2 &lt;split [1458/532]&gt; Bootstrap002
- 3 &lt;split [1458/552]&gt; Bootstrap003
- 4 &lt;split [1458/511]&gt; Bootstrap004
- 5 &lt;split [1458/506]&gt; Bootstrap005
- 6 &lt;split [1458/548]&gt; Bootstrap006
- 7 &lt;split [1458/537]&gt; Bootstrap007
- 8 &lt;split [1458/532]&gt; Bootstrap008
- 9 &lt;split [1458/527]&gt; Bootstrap009
-10 &lt;split [1458/539]&gt; Bootstrap010
-# ℹ 90 more rows</code></pre>
+<pre><code># A tibble: 1,000 × 2
+   splits             id           
+   &lt;list&gt;             &lt;chr&gt;        
+ 1 &lt;split [1458/545]&gt; Bootstrap0001
+ 2 &lt;split [1458/530]&gt; Bootstrap0002
+ 3 &lt;split [1458/534]&gt; Bootstrap0003
+ 4 &lt;split [1458/535]&gt; Bootstrap0004
+ 5 &lt;split [1458/513]&gt; Bootstrap0005
+ 6 &lt;split [1458/534]&gt; Bootstrap0006
+ 7 &lt;split [1458/519]&gt; Bootstrap0007
+ 8 &lt;split [1458/532]&gt; Bootstrap0008
+ 9 &lt;split [1458/529]&gt; Bootstrap0009
+10 &lt;split [1458/555]&gt; Bootstrap0010
+# ℹ 990 more rows</code></pre>
 </div>
 </div>
 </section>
 </section>
-<section id="reference-models" class="level2 page-columns page-full">
-<h2 class="anchored" data-anchor-id="reference-models">Reference Models</h2>
-<p>My final objective is to stack (combine or ensemble) several models of different nature at the end.</p>
-<p>However, for a first model I’d like to keep interpretability and to involve all predictors in order to apply some regularisation given the problem of multicollinearity. Hence, I’ll go with a regularised (shrinkage) Generalised Linear Model, <a href="https://glmnet.stanford.edu/articles/glmnet.html">GLM</a>. In this manner I can have a first look at feature importance.</p>
-<div class="page-columns page-full"><p>I’ll choose Elastic net regression. Features must be scaled!<a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a></p><div class="no-row-height column-margin column-container"><li id="fn7"><p><sup>7</sup> I don’t want to over-penalised non-scaled variables using shrinkage methods.</p></li></div></div>
-<p>The following code shows preprocessing steps enclosed in a pipeline or <strong>recipe</strong>. The list of available <em>step functions</em> can be found <a href="https://recipes.tidymodels.org/reference/index.html">here</a>.</p>
+<section id="base-models" class="level2 page-columns page-full">
+<h2 class="anchored" data-anchor-id="base-models">Base Models</h2>
+<p>My final objective is to stack (combine or ensemble) several models of different nature. However, for a first model I’d like to keep interpretability.</p>
+<p><strong>Where to start?</strong> In order to have a set of refence good models, I will proceed as follows:</p>
+<ul>
+<li>Cherry-picking predictors with linear influence from correlograms <a href="#fig-num-corr">Figure 2</a> and <a href="#fig-cat-corr">Figure 3</a>.</li>
+<li>Establish a <strong><em>workflow set</em></strong> of linear models:
+<ul>
+<li>Simplest OLS univariate lm <code>GrLivArea</code> vs. <code>SalePrice</code>.</li>
+<li>Cherry-pick predictors and fit a linear hyper-plane: multivariate lm.</li>
+<li>Add some flexibility on top with a Spline GAM.</li>
+</ul></li>
+</ul>
+<p>For the sake of RMSE metric comparison I will always scale numeric predictors and apply the Box-Cox transformation to the outcome <code>SalePrice</code>, this given the improvement shown in <a href="#fig-Y-trans">Figure 11</a>.</p>
+<p>The following code shows preprocessing steps enclosed in a pipeline or <strong><em>recipe</em></strong>. The list of available <em>step functions</em> can be found <a href="https://recipes.tidymodels.org/reference/index.html">here</a>.</p>
 <div class="cell">
 <details>
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb23"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: Preprocessing</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: cherry-picking_lm</span></span>
 <span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Base recipe ----</span></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>base_recipe <span class="ot">&lt;-</span></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">recipe</span>(SalePrice <span class="sc">~</span> GrLivArea <span class="sc">+</span> OverallQual, <span class="at">data =</span> ames_train)</span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>shrinkage_recipe <span class="ot">&lt;-</span></span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">recipe</span>(SalePrice <span class="sc">~</span> ., <span class="at">data =</span> ames_train) <span class="sc">|&gt;</span></span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_BoxCox</span>(SalePrice, <span class="at">limits =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>)) <span class="sc">|&gt;</span>  </span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_scale</span>(<span class="fu">all_numeric_predictors</span>()) <span class="sc">|&gt;</span></span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_dummy</span>(<span class="fu">all_nominal_predictors</span>()) <span class="sc">|&gt;</span>  </span>
-<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_zv</span>(<span class="fu">all_predictors</span>())</span>
-<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Recipe for trees  </span></span>
-<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>dummy_recipe <span class="ot">&lt;-</span></span>
-<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>  base_recipe <span class="sc">|&gt;</span></span>
-<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_dummy</span>(<span class="fu">all_nominal_predictors</span>())</span>
-<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Recipe for splines</span></span>
-<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>spline_recipe <span class="ot">&lt;-</span></span>
-<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>  dummy_recipe <span class="sc">|&gt;</span></span>
-<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_bs</span>(GrLivArea)</span>
-<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------- Preprocessing Pipelines ----------</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Uni-lm (simplest reasonable model)</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>simplest_rec <span class="ot">&lt;-</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">recipe</span>(SalePrice <span class="sc">~</span> GrLivArea, <span class="at">data =</span> ames_train) <span class="sc">|&gt;</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_BoxCox</span>(<span class="fu">all_numeric</span>(), <span class="at">limits =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_scale</span>(<span class="fu">all_numeric_predictors</span>())</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Multi-lm </span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>multi_lm_rec <span class="ot">&lt;-</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">recipe</span>(SalePrice <span class="sc">~</span> GrLivArea <span class="sc">+</span> TotBaths <span class="sc">+</span> GarageCars <span class="sc">+</span> TotalBsmtSF <span class="sc">+</span> YearBuilt <span class="sc">+</span> MasVnrArea <span class="sc">+</span> OverallQual <span class="sc">+</span> KitchenQual <span class="sc">+</span> ExistFireplace, <span class="at">data =</span> ames_train) <span class="sc">|&gt;</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_BoxCox</span>(<span class="fu">all_numeric</span>(), <span class="at">limits =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_scale</span>(<span class="fu">all_numeric_predictors</span>()) <span class="sc">|&gt;</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_dummy</span>(<span class="fu">all_nominal_predictors</span>())</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a><span class="co"># GAM: Splines </span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>multi_gam_rec <span class="ot">&lt;-</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>  multi_lm_rec <span class="sc">|&gt;</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_bs</span>(<span class="fu">all_numeric_predictors</span>())  <span class="co"># GAM basis fun expansion.</span></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------- Model specification ----------</span></span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a>lm_spec <span class="ot">&lt;-</span> </span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">linear_reg</span>() <span class="sc">|&gt;</span></span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">&quot;regression&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb23-30"><a href="#cb23-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">&quot;lm&quot;</span>)</span>
+<span id="cb23-31"><a href="#cb23-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-32"><a href="#cb23-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-33"><a href="#cb23-33" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------- Set of Workflows ----------  </span></span>
+<span id="cb23-34"><a href="#cb23-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-35"><a href="#cb23-35" aria-hidden="true" tabindex="-1"></a>my_lm_recipes <span class="ot">&lt;-</span> <span class="fu">list</span>(simplest_rec, multi_lm_rec, multi_gam_rec)</span>
+<span id="cb23-36"><a href="#cb23-36" aria-hidden="true" tabindex="-1"></a>my_lms <span class="ot">&lt;-</span> <span class="fu">list</span>(lm_spec)</span>
+<span id="cb23-37"><a href="#cb23-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-38"><a href="#cb23-38" aria-hidden="true" tabindex="-1"></a><span class="co"># With a workflow set I can combine a list of pre-processors with a list of models:</span></span>
+<span id="cb23-39"><a href="#cb23-39" aria-hidden="true" tabindex="-1"></a>ames_wfset <span class="ot">&lt;-</span> <span class="fu">workflow_set</span>(my_lm_recipes, my_lms, <span class="at">cross =</span> <span class="cn">TRUE</span>, <span class="at">case_weights =</span> <span class="cn">NULL</span>)</span>
+<span id="cb23-40"><a href="#cb23-40" aria-hidden="true" tabindex="-1"></a>ames_wfset</span>
+<span id="cb23-41"><a href="#cb23-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-42"><a href="#cb23-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-43"><a href="#cb23-43" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------- Fit Bootstraps ----------</span></span>
+<span id="cb23-44"><a href="#cb23-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-45"><a href="#cb23-45" aria-hidden="true" tabindex="-1"></a>doParallel<span class="sc">::</span><span class="fu">registerDoParallel</span>()</span>
+<span id="cb23-46"><a href="#cb23-46" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1982</span>)</span>
+<span id="cb23-47"><a href="#cb23-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-48"><a href="#cb23-48" aria-hidden="true" tabindex="-1"></a>ames_lms_res <span class="ot">&lt;-</span> <span class="fu">workflow_map</span>(ames_wfset, <span class="st">&quot;fit_resamples&quot;</span>, <span class="at">resamples =</span> ames_boots)</span>
+<span id="cb23-49"><a href="#cb23-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-50"><a href="#cb23-50" aria-hidden="true" tabindex="-1"></a>ames_lms_res <span class="sc">|&gt;</span>  </span>
+<span id="cb23-51"><a href="#cb23-51" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect_metrics</span>(<span class="at">summarize =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb23-52"><a href="#cb23-52" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(.metric <span class="sc">==</span> <span class="st">&quot;rmse&quot;</span>)</span>
+<span id="cb23-53"><a href="#cb23-53" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
-</div>
-<section id="setting-models-specifications" class="level3">
-<h3 class="anchored" data-anchor-id="setting-models-specifications">Setting Models Specifications</h3>
-<div class="cell">
-<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: ElasticNetSpecs</span></span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-fold: false</span></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(c(&quot;ranger&quot;, &quot;ëarth&quot;, &quot;glmnet&quot;))</span></span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Model 1: Elastic Net Regression</span></span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>elnet_spec <span class="ot">&lt;-</span></span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">linear_reg</span>(<span class="at">penalty =</span> <span class="fu">tune</span>(), <span class="at">mixture =</span> <span class="fu">tune</span>()) <span class="sc">|&gt;</span> <span class="co"># penalty = lambda; mixture = alpha</span></span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">&quot;regression&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">&quot;glmnet&quot;</span>)</span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>elnet_grid <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(<span class="at">penalty =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">100</span>, <span class="at">by =</span> <span class="dv">10</span>),</span>
-<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>                          <span class="at">mixture =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="at">by =</span> <span class="fl">0.2</span>) )</span>
-<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>doParallel<span class="sc">::</span><span class="fu">registerDoParallel</span>()</span>
-<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1982</span>)</span>
-<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a>elnet_tune_res <span class="ot">&lt;-</span> <span class="fu">tune_grid</span>(elnet_spec, </span>
-<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>                            <span class="at">preprocessor =</span> shrinkage_recipe, </span>
-<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a>                            <span class="at">grid =</span> elnet_grid, </span>
-<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a>                            <span class="at">resamples =</span> ames_boots)</span>
-<span id="cb24-26"><a href="#cb24-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-27"><a href="#cb24-27" aria-hidden="true" tabindex="-1"></a>elnet_tune_res <span class="sc">|&gt;</span></span>
-<span id="cb24-28"><a href="#cb24-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect_metrics</span>() <span class="sc">|&gt;</span></span>
-<span id="cb24-29"><a href="#cb24-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(.metric <span class="sc">==</span> <span class="st">&quot;rmse&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb24-30"><a href="#cb24-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(mean)</span>
-<span id="cb24-31"><a href="#cb24-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-32"><a href="#cb24-32" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-33"><a href="#cb24-33" aria-hidden="true" tabindex="-1"></a>elnet_tune_res <span class="sc">|&gt;</span></span>
-<span id="cb24-34"><a href="#cb24-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect_metrics</span>() <span class="sc">|&gt;</span></span>
-<span id="cb24-35"><a href="#cb24-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(.metric <span class="sc">==</span> <span class="st">&quot;rmse&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb24-36"><a href="#cb24-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(penalty, mean, <span class="at">color =</span> <span class="fu">factor</span>(mixture), <span class="at">group =</span> <span class="fu">factor</span>(mixture))) <span class="sc">+</span> </span>
-<span id="cb24-37"><a href="#cb24-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>() <span class="sc">+</span> </span>
-<span id="cb24-38"><a href="#cb24-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span> </span>
-<span id="cb24-39"><a href="#cb24-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">&quot;RMSE&quot;</span>)</span>
-<span id="cb24-40"><a href="#cb24-40" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 66 × 8
-   penalty mixture .metric .estimator   mean     n std_err .config              
-     &lt;dbl&gt;   &lt;dbl&gt; &lt;chr&gt;   &lt;chr&gt;       &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;                
- 1       0     0   rmse    standard   0.0658   100 0.00542 Preprocessor1_Model01
- 2       0     0.2 rmse    standard   0.0702   100 0.00592 Preprocessor1_Model12
- 3       0     0.6 rmse    standard   0.0702   100 0.00592 Preprocessor1_Model34
- 4       0     0.4 rmse    standard   0.0703   100 0.00592 Preprocessor1_Model23
- 5       0     0.8 rmse    standard   0.0704   100 0.00594 Preprocessor1_Model45
- 6       0     1   rmse    standard   0.0705   100 0.00595 Preprocessor1_Model56
- 7      10     0   rmse    standard   0.151    100 0.0101  Preprocessor1_Model02
- 8      20     0   rmse    standard   0.169    100 0.0123  Preprocessor1_Model03
- 9      30     0   rmse    standard   0.178    100 0.0134  Preprocessor1_Model04
-10      40     0   rmse    standard   0.183    100 0.0141  Preprocessor1_Model05
-# ℹ 56 more rows</code></pre>
-</div>
-<div class="cell-output-display">
-<p><img src="data:image/png;base64,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" class="img-fluid" width="672"></p>
+<pre><code># A tibble: 3 × 4
+  wflow_id            info             option    result    
+  &lt;chr&gt;               &lt;list&gt;           &lt;list&gt;    &lt;list&gt;    
+1 recipe_1_linear_reg &lt;tibble [1 × 4]&gt; &lt;opts[0]&gt; &lt;list [0]&gt;
+2 recipe_2_linear_reg &lt;tibble [1 × 4]&gt; &lt;opts[0]&gt; &lt;list [0]&gt;
+3 recipe_3_linear_reg &lt;tibble [1 × 4]&gt; &lt;opts[0]&gt; &lt;list [0]&gt;
+# A tibble: 3 × 9
+  wflow_id         .config preproc model .metric .estimator   mean     n std_err
+  &lt;chr&gt;            &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt;   &lt;chr&gt;       &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt;
+1 recipe_1_linear… Prepro… recipe  line… rmse    standard   0.138   1000 0.00373
+2 recipe_2_linear… Prepro… recipe  line… rmse    standard   0.0764  1000 0.00201
+3 recipe_3_linear… Prepro… recipe  line… rmse    standard   0.0761  1000 0.00200</code></pre>
 </div>
 </div>
+<p>OK! We can see the power of adding good predictors.</p>
+<p>My reference is the <strong>linear GAM with Splines</strong>, showing a mean RMSE = 0.0761. The result was transformed in the pipeline, therefore no units are displayed.</p>
+<div class="page-columns page-full"><p></p><div class="no-row-height column-margin column-container"><span class>I got slighlty better results using one-hot encoded categorical Feats. Moreover, applying the Box-Cox transformation to numeric predictors helped too! When they are skewed, the fit is dramatically affected. Remember <a href="#fig-cont_linear">Figure 4</a>.</span></div></div>
+<p><strong><em>To be continued…</em></strong></p>
+<p>Now that I have some reference RMSEs, I proceed to involve all predictors. Having high multicollinearty it’s reasonable to think of some sort of penalisation or shrinkage method. Hence, I’ll go with a regularised (shrinkage) Generalised Linear Model, <a href="https://glmnet.stanford.edu/articles/glmnet.html">GLM</a>. In this manner I can have a first look at feature importance.</p>
+<p>I’ll choose Elastic net regression. Features must be scaled! I don’t want to over-penalised non-scaled variables using shrinkage methods.</p>
 <div class="cell">
 <details>
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: OtherModelsSpecs</span></span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="co"># linear_reg(mixture = .1) %&gt;% </span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;glmnet&quot;) %&gt;% </span></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   translate()</span></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="co"># # Model 2 Setup</span></span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="co"># spec_lm &lt;- </span></span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a><span class="co">#   linear_reg() |&gt;</span></span>
-<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;lm&quot;) |&gt;</span></span>
-<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;)</span></span>
-<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a><span class="co"># # Model 3</span></span>
-<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a><span class="co"># spec_rf &lt;-</span></span>
-<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   rand_forest(trees = 1000) |&gt;</span></span>
-<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;ranger&quot;) |&gt;</span></span>
-<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;)</span></span>
-<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a><span class="co"># # Model 4</span></span>
-<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a><span class="co"># spec_mars &lt;-</span></span>
-<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a><span class="co">#   mars() |&gt;</span></span>
-<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;earth&quot;) |&gt;</span></span>
-<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;)</span></span>
-<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: Preprocessing</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="co"># shrinkage_rec &lt;-</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   recipe(SalePrice ~ ., data = ames_train) |&gt;</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   update_role(Id, new_role = &quot;Id variabe&quot;) |&gt;</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   update_role(dataset, new_role = &quot;splitting variable&quot;) |&gt;</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="co">#   step_BoxCox(SalePrice, limits = c(-1, 1)) |&gt;  </span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="co">#   step_scale(all_numeric_predictors()) |&gt;</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="co">#   step_dummy(all_nominal_predictors()) |&gt;  </span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a><span class="co">#   step_zv(all_predictors())</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a><span class="co"># shrinkage_spline_rec &lt;-</span></span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a><span class="co">#   shrinkage_rec |&gt;</span></span>
+<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a><span class="co">#   step_bs(all_numeric_predictors())  </span></span>
+<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Recipe for trees  </span></span>
+<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a><span class="co"># dummy_recipe &lt;-</span></span>
+<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a><span class="co">#   base_recipe |&gt;</span></span>
+<span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a><span class="co">#   step_dummy(all_nominal_predictors())</span></span>
+<span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a><span class="co"># Recipe for splines</span></span>
+<span id="cb25-25"><a href="#cb25-25" aria-hidden="true" tabindex="-1"></a><span class="co"># spline_recipe &lt;-</span></span>
+<span id="cb25-26"><a href="#cb25-26" aria-hidden="true" tabindex="-1"></a><span class="co">#   dummy_recipe |&gt;</span></span>
+<span id="cb25-27"><a href="#cb25-27" aria-hidden="true" tabindex="-1"></a><span class="co">#   step_bs(GrLivArea)</span></span>
+<span id="cb25-28"><a href="#cb25-28" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-</section>
-<section id="defining-a-workflow-set" class="level3">
-<h3 class="anchored" data-anchor-id="defining-a-workflow-set">Defining a workflow set</h3>
-<p>With a <strong><em>workflow set</em></strong> I can combine a list of pre-processors with a list of models:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: ElasticNetSpecs</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-fold: false</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(c(&quot;ranger&quot;, &quot;earth&quot;, &quot;glmnet&quot;))</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Linear Model</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="co"># lm_spec &lt;- </span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="co">#   linear_reg() |&gt;</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;) |&gt;</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;lm&quot;)</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Linear Model penalised</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a><span class="co"># elnet_spec &lt;-</span></span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a><span class="co">#   linear_reg(penalty = tune(), mixture = tune()) |&gt; # penalty = lambda; mixture = alpha</span></span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;) |&gt;</span></span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;glmnet&quot;)</span></span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a><span class="co"># elnet_grid &lt;- expand_grid(penalty = seq(0, 100, by = 10),</span></span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a><span class="co">#                           mixture = seq(0, 1, by = 0.2) )</span></span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a><span class="co"># doParallel::registerDoParallel()</span></span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a><span class="co"># set.seed(1982)</span></span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a><span class="co"># elnet_tune_res &lt;- tune_grid(elnet_spec, </span></span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a><span class="co">#                             preprocessor = shrinkage_spline_rec, </span></span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a><span class="co">#                             grid = elnet_grid, </span></span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a><span class="co">#                             resamples = ames_boots)</span></span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a><span class="co"># elnet_tune_res |&gt;</span></span>
+<span id="cb26-33"><a href="#cb26-33" aria-hidden="true" tabindex="-1"></a><span class="co">#   collect_metrics() |&gt;</span></span>
+<span id="cb26-34"><a href="#cb26-34" aria-hidden="true" tabindex="-1"></a><span class="co">#   filter(.metric == &quot;rmse&quot;) |&gt;</span></span>
+<span id="cb26-35"><a href="#cb26-35" aria-hidden="true" tabindex="-1"></a><span class="co">#   arrange(mean)</span></span>
+<span id="cb26-36"><a href="#cb26-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-37"><a href="#cb26-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-38"><a href="#cb26-38" aria-hidden="true" tabindex="-1"></a><span class="co"># elnet_tune_res |&gt;</span></span>
+<span id="cb26-39"><a href="#cb26-39" aria-hidden="true" tabindex="-1"></a><span class="co">#   collect_metrics() |&gt;</span></span>
+<span id="cb26-40"><a href="#cb26-40" aria-hidden="true" tabindex="-1"></a><span class="co">#   filter(.metric == &quot;rmse&quot;) |&gt;</span></span>
+<span id="cb26-41"><a href="#cb26-41" aria-hidden="true" tabindex="-1"></a><span class="co">#   ggplot(aes(penalty, mean, color = factor(mixture), group = factor(mixture))) + </span></span>
+<span id="cb26-42"><a href="#cb26-42" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_point() + </span></span>
+<span id="cb26-43"><a href="#cb26-43" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_line() + </span></span>
+<span id="cb26-44"><a href="#cb26-44" aria-hidden="true" tabindex="-1"></a><span class="co">#   labs(y = &quot;RMSE&quot;)</span></span>
+<span id="cb26-45"><a href="#cb26-45" aria-hidden="true" tabindex="-1"></a> </span>
+<span id="cb26-46"><a href="#cb26-46" aria-hidden="true" tabindex="-1"></a><span class="co"># elnet_spec &lt;-</span></span>
+<span id="cb26-47"><a href="#cb26-47" aria-hidden="true" tabindex="-1"></a><span class="co">#   linear_reg(penalty = 10, mixture = 0) |&gt; # penalty = lambda; mixture = alpha</span></span>
+<span id="cb26-48"><a href="#cb26-48" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;) |&gt;</span></span>
+<span id="cb26-49"><a href="#cb26-49" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;glmnet&quot;)</span></span>
+<span id="cb26-50"><a href="#cb26-50" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
 <div class="cell">
 <details>
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb27"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Workflow set</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: OtherModelsSpecs</span></span>
 <span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Allows combine different pre-processors and models fit them all at once and compare results</span></span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="co"># list_of_recipes &lt;- list(base_recipe, dummy_recipe, spline_recipe)</span></span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="co"># list_of_models &lt;- list(spec_rf, spec_mars, spec_lm)</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="co"># linear_reg(mixture = .1) %&gt;% </span></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;glmnet&quot;) %&gt;% </span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   translate()</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_set &lt;- </span></span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a><span class="co">#   workflow_set(</span></span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a><span class="co">#     list_of_recipes, </span></span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a><span class="co">#     list_of_models, </span></span>
-<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a><span class="co">#     cross = FALSE, </span></span>
-<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a><span class="co">#     case_weights = NULL)</span></span>
-<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_set</span></span>
-<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="co"># # Model 2 Setup</span></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a><span class="co"># spec_lm &lt;- </span></span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a><span class="co">#   linear_reg() |&gt;</span></span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;lm&quot;) |&gt;</span></span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;)</span></span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a><span class="co"># # Model 3</span></span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a><span class="co"># spec_rf &lt;-</span></span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   rand_forest(trees = 1000) |&gt;</span></span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;ranger&quot;) |&gt;</span></span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;)</span></span>
+<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a><span class="co"># # Model 4</span></span>
+<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a><span class="co"># spec_mars &lt;-</span></span>
+<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a><span class="co">#   mars() |&gt;</span></span>
+<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_engine(&quot;earth&quot;) |&gt;</span></span>
+<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a><span class="co">#   set_mode(&quot;regression&quot;)</span></span>
+<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-</section>
-<section id="training-with-the-bootstrap-samples" class="level3">
-<h3 class="anchored" data-anchor-id="training-with-the-bootstrap-samples">Training with the Bootstrap samples</h3>
 <div class="cell">
 <details>
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb28"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: GoF</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Workflow set</span></span>
 <span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(&quot;doParallel&quot;)</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Allows combine different pre-processors and models fit them all at once and compare results</span></span>
 <span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="co"># doParallel::registerDoParallel()</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="co"># set.seed(1982)</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="co"># my_recipes &lt;- list(base_recipe, dummy_recipe, spline_recipe)</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="co"># my_models &lt;- list(spec_rf, spec_mars, spec_lm)</span></span>
 <span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_results &lt;- workflow_map(ames_set, &quot;fit_resamples&quot;, resamples = ames_boots)</span></span>
-<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_results</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a><span class="co"># my_recipes &lt;- list(num_uni_lm_rec, num_mul_lm_rec, num_mul_gam_rec)</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a><span class="co"># my_models &lt;- list(lm_spec, lm_spec, lm_spec)</span></span>
 <span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a><span class="co"># save(ames_results, file = &quot;./models/ames_results_wf.Rdata&quot;)</span></span>
-<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_results &lt;- load(&quot;./models/ames_results_wf.Rdata&quot;)</span></span>
-<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_wfset &lt;- </span></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a><span class="co">#   workflow_set(</span></span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a><span class="co">#     my_recipes, </span></span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a><span class="co">#     my_models, </span></span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a><span class="co">#     cross = FALSE, </span></span>
+<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a><span class="co">#     case_weights = NULL)</span></span>
+<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-19"><a href="#cb28-19" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_wfset</span></span>
+<span id="cb28-20"><a href="#cb28-20" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-</section>
-<section id="evaluating-the-workflow" class="level3">
-<h3 class="anchored" data-anchor-id="evaluating-the-workflow">Evaluating the workflow</h3>
 <div class="cell">
 <details>
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb29"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: EvaluateResults</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: GoF</span></span>
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="co"># plt_res &lt;- workflowsets::autoplot(ames_results)</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(&quot;doParallel&quot;)</span></span>
 <span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="co"># plt_res</span></span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="co"># doParallel::registerDoParallel()</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a><span class="co"># set.seed(1982)</span></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_results &lt;- workflow_map(ames_wfset, &quot;fit_resamples&quot;, resamples = ames_boots)</span></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_results |&gt;  </span></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a><span class="co">#   collect_metrics(summarize = TRUE) |&gt;</span></span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a><span class="co">#   filter(.metric == &quot;rmse&quot;)</span></span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a><span class="co"># save(ames_results, file = &quot;./models/ames_results_wf.Rdata&quot;)</span></span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a><span class="co"># ames_results &lt;- load(&quot;./models/ames_results_wf.Rdata&quot;)</span></span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 <div class="cell">
@@ -5801,10 +5869,6 @@ $ YrSold      &lt;dbl&gt; 2007, 2008, 2007</code></pre>
 <span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-</section>
-</section>
-<section id="model-selection" class="level2">
-<h2 class="anchored" data-anchor-id="model-selection">Model Selection</h2>
 </section>
 <section id="full-width-figures" class="level2">
 <h2 class="anchored" data-anchor-id="full-width-figures">Full Width Figures</h2>

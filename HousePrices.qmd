@@ -565,7 +565,7 @@ Nevertheless, the moment the first data transformation is performed, we start to
 Because we have powerful computers and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of functions that includes the logarithmic one depending on the value of a parameter *lambda*. This parameter is automatically assessed.
 
 ::: column-margin
-*Box-Cox transformations*:
+*Family Box-Cox transformations*:
 
 <br/>
 
@@ -632,23 +632,20 @@ ames_all |>
 
 One of the motivations to develop this project is because I'm switching to the **Tidymodels** framework. Therefore, it's time to load the library to train a simple reference model.
 
-## Choosing Resampling Technique
-Depending on the chosen resample technique to estimate the Goodness-of-Fit (test error)
-Take a look at the pristine explanation by [@resamplingML].
+## Resampling Technique for Test Error Estimation
+This is a critical step for final model selection. Depending on the chosen resample technique to estimate the Goodness-of-Prediction or test error, in this case metrics like RMSE can be slightly optimistic or conservative. Take a look at the pristine explanation by [@resamplingML].
 
-- **Simple validation?** 1 train fold and 1 test fold: NO, it's old and innacurate.
+- **Simple validation set?** 1 train fold and 1 test fold: NO, it's old and innacurate.
 - **v-folds Cross-Validation?** Analysis (training folds), Assessment (validation folds) and test: it's *small data*, I can choose something even more powerful.
-- **Bootstrap Sampling?** YES.
+- **The Bootstrap?** YES.
 
 By today's standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the *assessment set*. Although performance metrics will be slightly conservative or pesimistic, I prefer it.
 
-I will generate 300 bootstrap samples. 
+I will generate 1000 bootstrap-samples. 
 
-### Expending Data Budget
+### Expending the data budget
 
-Normally with v-fold CV I expend my data budget, but here doing resampling with replacement is kind of printing money... 
-
-Here's the code to generate the bootstraps and therefore split the data budget:
+Normally with v-fold CV I expend my data budget, but here doing resampling with replacement is kind of printing money... Here's the code to generate the bootstraps and therefore split the data budget:
 
 ```{r}
 #| label: DataBudget
@@ -666,55 +663,116 @@ ames_train <-
   filter(dataset == "train") |>
   select(-SalePrice_bc)
 
+# ---- v-folds Cross Validation ----
+
 # v-folds CV repeated 10 times (v x 10 models)
+# set.seed(1982)
 # ames_folds <- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # v = 10 folds are default
 
-# Generate 1000 bootstrapped samples
+# ---- The Bootstrap ----
+
 set.seed(1982)
-ames_boots <- bootstraps(ames_train, times = 300, strata = SalePrice)
+ames_boots <- bootstraps(ames_train, times = 1000, strata = SalePrice)
 ames_boots  
 ```
 
-## Reference Models
+## Base Models
 
-My final objective is to stack (combine or ensemble) several models of different nature at the end.
+My final objective is to stack (combine or ensemble) several models of different nature. However, for a first model I'd like to keep interpretability. 
 
-However, for a first model I'd like to keep interpretability  and to involve all predictors in order to apply some regularisation given the problem of multicollinearity. 
-Hence, I'll go with a regularised (shrinkage) Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
+**Where to start?** In order to have a set of refence good models, I will proceed as follows:
 
-I'll choose Elastic net regression. Features must be scaled![^7]
+- Cherry-picking predictors with linear influence from correlograms @fig-num-corr and @fig-cat-corr.
+- Establish a ***workflow set*** of linear models:
+  - Simplest OLS univariate lm `GrLivArea` vs. `SalePrice`.
+  - Cherry-pick predictors and fit a linear hyper-plane: multivariate lm.
+  - Add some flexibility on top with a Spline GAM.
 
-[^7]: I don't want to over-penalised non-scaled variables using shrinkage methods.
+For the sake of RMSE metric comparison I will always scale numeric predictors and apply the Box-Cox transformation to the outcome `SalePrice`, this given the improvement shown in @fig-Y-trans. 
 
-The following code shows preprocessing steps enclosed in a pipeline or **recipe**. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
+The following code shows preprocessing steps enclosed in a pipeline or ***recipe***. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
 
+```{r}
+#| label: cherry-picking_lm
+
+# ---------- Preprocessing Pipelines ----------
+
+# Uni-lm (simplest reasonable model)
+simplest_rec <-
+  recipe(SalePrice ~ GrLivArea, data = ames_train) |>
+  step_BoxCox(all_numeric(), limits = c(-1, 1)) |> 
+  step_scale(all_numeric_predictors())
+
+# Multi-lm 
+multi_lm_rec <-
+  recipe(SalePrice ~ GrLivArea + TotBaths + GarageCars + TotalBsmtSF + YearBuilt + MasVnrArea + OverallQual + KitchenQual + ExistFireplace, data = ames_train) |>
+  step_BoxCox(all_numeric(), limits = c(-1, 1)) |> 
+  step_scale(all_numeric_predictors()) |>
+  step_dummy(all_nominal_predictors())
+
+# GAM: Splines 
+multi_gam_rec <-
+  multi_lm_rec |>
+  step_bs(all_numeric_predictors())  # GAM basis fun expansion.
+
+
+# ---------- Model specification ----------
+
+lm_spec <- 
+  linear_reg() |>
+  set_mode("regression") |>
+  set_engine("lm")
+
+
+# ---------- Set of Workflows ----------  
+
+my_lm_recipes <- list(simplest_rec, multi_lm_rec, multi_gam_rec)
+my_lms <- list(lm_spec)
+
+# With a workflow set I can combine a list of pre-processors with a list of models:
+ames_wfset <- workflow_set(my_lm_recipes, my_lms, cross = TRUE, case_weights = NULL)
+ames_wfset
+
+
+# ---------- Fit Bootstraps ----------
+
+doParallel::registerDoParallel()
+set.seed(1982)
+
+ames_lms_res <- workflow_map(ames_wfset, "fit_resamples", resamples = ames_boots)
+
+ames_lms_res |>  
+  collect_metrics(summarize = TRUE) |>
+  filter(.metric == "rmse")
+```
+
+OK! We can see the power of adding good predictors.
+
+My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0761. The result was transformed in the pipeline, therefore no units are displayed.
+
+[I got slighlty better results using one-hot encoded categorical Feats. Moreover, applying the Box-Cox transformation to numeric predictors helped too! When they are skewed, the fit is dramatically affected. Remember @fig-cont_linear.]{.column-margin}
+
+***To be continued...***
+
+Now that I have some reference RMSEs, I proceed to involve all predictors. Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a regularised (shrinkage) Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
+
+I'll choose Elastic net regression. Features must be scaled! I don't want to over-penalised non-scaled variables using shrinkage methods.
 
 ```{r}
 #| label: Preprocessing
 
-# ---- Base recipe ----
-num_uni_lm_rec <-
-  recipe(SalePrice ~ GrLivArea, data = ames_train) |>
-  step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
-  step_scale(all_numeric_predictors())
+# shrinkage_rec <-
+#   recipe(SalePrice ~ ., data = ames_train) |>
+#   update_role(Id, new_role = "Id variabe") |>
+#   update_role(dataset, new_role = "splitting variable") |>
+#   step_BoxCox(SalePrice, limits = c(-1, 1)) |>  
+#   step_scale(all_numeric_predictors()) |>
+#   step_dummy(all_nominal_predictors()) |>  
+#   step_zv(all_predictors())
 
-num_mul_lm_rec <-
-  recipe(SalePrice ~ GrLivArea + GarageCars, data = ames_train) |>
-  step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
-  step_scale(all_numeric_predictors())
-
-shrinkage_rec <-
-  recipe(SalePrice ~ ., data = ames_train) |>
-  update_role(Id, new_role = "Id variabe") |>
-  update_role(dataset, new_role = "splitting variable") |>
-  step_BoxCox(SalePrice, limits = c(-1, 1)) |>  
-  step_scale(all_numeric_predictors()) |>
-  step_dummy(all_nominal_predictors()) |>  
-  step_zv(all_predictors())
-
-shrinkage_spline_rec <-
-  shrinkage_rec |>
-  step_bs(all_numeric_predictors())  
+# shrinkage_spline_rec <-
+#   shrinkage_rec |>
+#   step_bs(all_numeric_predictors())  
 
 
 
@@ -729,7 +787,6 @@ shrinkage_spline_rec <-
 #   step_bs(GrLivArea)
 ```
 
-### Setting Models Specifications
 
 ```{r}
 #| label: ElasticNetSpecs
@@ -738,10 +795,10 @@ shrinkage_spline_rec <-
 # install.packages(c("ranger", "earth", "glmnet"))
 
 # Linear Model
-lm_spec <- 
-  linear_reg() |>
-  set_mode("regression") |>
-  set_engine("lm")
+# lm_spec <- 
+#   linear_reg() |>
+#   set_mode("regression") |>
+#   set_engine("lm")
 
 
 # Linear Model penalised
@@ -776,10 +833,10 @@ lm_spec <-
 #   geom_line() + 
 #   labs(y = "RMSE")
  
-elnet_spec <-
-  linear_reg(penalty = 10, mixture = 0) |> # penalty = lambda; mixture = alpha
-  set_mode("regression") |>
-  set_engine("glmnet")
+# elnet_spec <-
+#   linear_reg(penalty = 10, mixture = 0) |> # penalty = lambda; mixture = alpha
+#   set_mode("regression") |>
+#   set_engine("glmnet")
 
 ```
 
@@ -812,9 +869,7 @@ elnet_spec <-
 ```
 
 
-### Defining a workflow set
 
-With a ***workflow set*** I can combine a list of pre-processors with a list of models:
 
 ```{r}
 
@@ -822,37 +877,36 @@ With a ***workflow set*** I can combine a list of pre-processors with a list of 
 
 # Allows combine different pre-processors and models fit them all at once and compare results
 
-# list_of_recipes <- list(base_recipe, dummy_recipe, spline_recipe)
-# list_of_models <- list(spec_rf, spec_mars, spec_lm)
+# my_recipes <- list(base_recipe, dummy_recipe, spline_recipe)
+# my_models <- list(spec_rf, spec_mars, spec_lm)
 
-list_of_recipes <- list(num_uni_lm_rec, num_mul_lm_rec, shrinkage_spline_rec)
-list_of_models <- list(lm_spec, lm_spec, elnet_spec)
+# my_recipes <- list(num_uni_lm_rec, num_mul_lm_rec, num_mul_gam_rec)
+# my_models <- list(lm_spec, lm_spec, lm_spec)
 
-ames_set <- 
-  workflow_set(
-    list_of_recipes, 
-    list_of_models, 
-    cross = FALSE, 
-    case_weights = NULL)
+# ames_wfset <- 
+#   workflow_set(
+#     my_recipes, 
+#     my_models, 
+#     cross = FALSE, 
+#     case_weights = NULL)
 
-ames_set
+# ames_wfset
 ```
 
-### Training with the Bootstrap samples
 
 ```{r}
 #| label: GoF
 
 # install.packages("doParallel")
 
-doParallel::registerDoParallel()
-set.seed(1982)
+# doParallel::registerDoParallel()
+# set.seed(1982)
 
-ames_results <- workflow_map(ames_set, "fit_resamples", resamples = ames_boots)
+# ames_results <- workflow_map(ames_wfset, "fit_resamples", resamples = ames_boots)
 
-ames_results |>  
-  collect_metrics(summarize = TRUE) |>
-  filter(.metric == "rmse")
+# ames_results |>  
+#   collect_metrics(summarize = TRUE) |>
+#   filter(.metric == "rmse")
 
 
 
@@ -879,8 +933,6 @@ ames_results |>
 # trained_models |>  collect_metrics(summarize = TRUE) # TRUE gets Avg. performance 
 
 ```
-
-## Model Selection
 
 
 ## Full Width Figures
