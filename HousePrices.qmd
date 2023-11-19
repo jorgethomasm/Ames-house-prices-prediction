@@ -664,7 +664,7 @@ tidymodels_prefer()
 ames_train <- 
   ames_all |> 
   filter(dataset == "train") |>
-  select(-c(Id, dataset, SalePrice_bc))
+  select(-SalePrice_bc)
 
 # v-folds CV repeated 10 times (v x 10 models)
 # ames_folds <- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # v = 10 folds are default
@@ -693,39 +693,40 @@ The following code shows preprocessing steps enclosed in a pipeline or **recipe*
 #| label: Preprocessing
 
 # ---- Base recipe ----
-num_uni_lm_recipe <-
-  recipe(SalePrice ~ GrLivArea, data = ames_train)
-  #step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
-  #step_scale(all_numeric_predictors())
+num_uni_lm_rec <-
+  recipe(SalePrice ~ GrLivArea, data = ames_train) |>
+  step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
+  step_scale(all_numeric_predictors())
 
-num_mul_lm_recipe <-
-  recipe(SalePrice ~ GrLivArea + GarageCars, data = ames_train) 
-  #step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
-  #step_scale(all_numeric_predictors())
+num_mul_lm_rec <-
+  recipe(SalePrice ~ GrLivArea + GarageCars, data = ames_train) |>
+  step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
+  step_scale(all_numeric_predictors())
 
-
-shrinkage_recipe <-
+shrinkage_rec <-
   recipe(SalePrice ~ ., data = ames_train) |>
+  update_role(Id, new_role = "Id variabe") |>
+  update_role(dataset, new_role = "splitting variable") |>
   step_BoxCox(SalePrice, limits = c(-1, 1)) |>  
   step_scale(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors()) |>  
   step_zv(all_predictors())
 
-shrinkage_spline_recipe <-
-  shrinkage_recipe |>
+shrinkage_spline_rec <-
+  shrinkage_rec |>
   step_bs(all_numeric_predictors())  
 
 
 
 # Recipe for trees  
-dummy_recipe <-
-  base_recipe |>
-  step_dummy(all_nominal_predictors())
+# dummy_recipe <-
+#   base_recipe |>
+#   step_dummy(all_nominal_predictors())
 
 # Recipe for splines
-spline_recipe <-
-  dummy_recipe |>
-  step_bs(GrLivArea)
+# spline_recipe <-
+#   dummy_recipe |>
+#   step_bs(GrLivArea)
 ```
 
 ### Setting Models Specifications
@@ -744,37 +745,42 @@ lm_spec <-
 
 
 # Linear Model penalised
+# elnet_spec <-
+#   linear_reg(penalty = tune(), mixture = tune()) |> # penalty = lambda; mixture = alpha
+#   set_mode("regression") |>
+#   set_engine("glmnet")
+
+# elnet_grid <- expand_grid(penalty = seq(0, 100, by = 10),
+#                           mixture = seq(0, 1, by = 0.2) )
+
+
+# doParallel::registerDoParallel()
+# set.seed(1982)
+
+# elnet_tune_res <- tune_grid(elnet_spec, 
+#                             preprocessor = shrinkage_spline_rec, 
+#                             grid = elnet_grid, 
+#                             resamples = ames_boots)
+
+# elnet_tune_res |>
+#   collect_metrics() |>
+#   filter(.metric == "rmse") |>
+#   arrange(mean)
+
+
+# elnet_tune_res |>
+#   collect_metrics() |>
+#   filter(.metric == "rmse") |>
+#   ggplot(aes(penalty, mean, color = factor(mixture), group = factor(mixture))) + 
+#   geom_point() + 
+#   geom_line() + 
+#   labs(y = "RMSE")
+ 
 elnet_spec <-
-  linear_reg(penalty = tune(), mixture = tune()) |> # penalty = lambda; mixture = alpha
+  linear_reg(penalty = 10, mixture = 0) |> # penalty = lambda; mixture = alpha
   set_mode("regression") |>
   set_engine("glmnet")
 
-elnet_grid <- expand_grid(penalty = seq(0, 100, by = 10),
-                          mixture = seq(0, 1, by = 0.2) )
-
-
-doParallel::registerDoParallel()
-set.seed(1982)
-
-elnet_tune_res <- tune_grid(elnet_spec, 
-                            preprocessor = shrinkage_spline_recipe, 
-                            grid = elnet_grid, 
-                            resamples = ames_boots)
-
-elnet_tune_res |>
-  collect_metrics() |>
-  filter(.metric == "rmse") |>
-  arrange(mean)
-
-
-elnet_tune_res |>
-  collect_metrics() |>
-  filter(.metric == "rmse") |>
-  ggplot(aes(penalty, mean, color = factor(mixture), group = factor(mixture))) + 
-  geom_point() + 
-  geom_line() + 
-  labs(y = "RMSE")
- 
 ```
 
 ```{r}
@@ -819,14 +825,14 @@ With a ***workflow set*** I can combine a list of pre-processors with a list of 
 # list_of_recipes <- list(base_recipe, dummy_recipe, spline_recipe)
 # list_of_models <- list(spec_rf, spec_mars, spec_lm)
 
-list_of_recipes <- list(num_uni_lm_recipe, num_mul_lm_recipe)
-list_of_models <- list(lm_spec)
+list_of_recipes <- list(num_uni_lm_rec, num_mul_lm_rec, shrinkage_spline_rec)
+list_of_models <- list(lm_spec, lm_spec, elnet_spec)
 
 ames_set <- 
   workflow_set(
     list_of_recipes, 
     list_of_models, 
-    cross = TRUE, 
+    cross = FALSE, 
     case_weights = NULL)
 
 ames_set
