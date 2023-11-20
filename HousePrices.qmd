@@ -277,13 +277,13 @@ ames_all <- ames_all |>
   mutate(ExistMasVeneer = factor(ExistMasVeneer, levels = c("No", "Yes")))
  
 
-
 # ---- The rest are factors ----
-# I'm going to assume that the rest are Categorical variables 
 
+# I'm going to assume that the rest are Categorical variables 
 ames_all <- ames_all |>
   mutate(across(where(is.character), factor)) |>
   mutate(YrSold = factor(YrSold))  # Convert to factor
+
 
 # ---- Numerical Features ----
 
@@ -303,7 +303,6 @@ ames_all <- ames_all |>
 # Most of the values are 0 -> almost 0 variance. 
 ames_all$LowQualFinSF <- NULL
 ames_all$PoolArea <- NULL
-
 ```
 
 Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable, similar to what I did with the new `GarageNew` column.
@@ -679,7 +678,7 @@ ames_train <-
 # ---- The Bootstrap ----
 
 set.seed(1982)
-ames_boots <- bootstraps(ames_train, times = 200, strata = SalePrice)
+ames_boots <- bootstraps(ames_train, times = 1000, strata = SalePrice)
 ames_boots  
 ```
 
@@ -704,7 +703,7 @@ The following code shows preprocessing steps enclosed in a pipeline or ***recipe
 #| fig-cap: "Correlated numerical predictors are skewed and contain zero values."
 
 ames_train |>  
-  select(c(GrLivArea, TotBaths, GarageCars, TotalBsmtSF, YearBuilt)) |> 
+  select(c(GrLivArea, TotBaths, GarageArea, TotalBsmtSF, YearBuilt)) |> 
   pivot_longer(GrLivArea:YearBuilt) |>
   ggplot(aes(x = value)) +  
   geom_histogram(bins = 50, color = "lightgrey", fill = "lightgrey") +  
@@ -722,8 +721,8 @@ Given the sensitivity to tails and outliers of linear models, remember @fig-cont
 # Uni-lm (simplest reasonable model)
 simplest_rec <-
   recipe(SalePrice ~ GrLivArea, data = ames_train) |>
-  step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
-  step_YeoJohnsom(GrLivArea) |>
+  step_BoxCox(SalePrice) |> 
+  step_YeoJohnson(GrLivArea) |>
   step_scale(all_numeric_predictors())
 
 # Sanity check for warnings:
@@ -732,8 +731,8 @@ simplest_rec <-
 
 # Multi-lm 
 multi_lm_rec <-
-  recipe(SalePrice ~ GrLivArea + TotBaths + GarageCars + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + ExistFireplace, data = ames_train) |>
-  step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
+  recipe(SalePrice ~ GrLivArea + TotBaths + GarageArea + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + Foundation + ExistFireplace + HeatingQC, data = ames_train) |>
+  step_BoxCox(SalePrice) |> 
   step_YeoJohnson(all_numeric_predictors()) |>
   step_scale(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors())
@@ -779,11 +778,29 @@ ames_lms_res |>
 
 OK! We can see the power of adding good predictors.
 
-My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0761. The result was transformed in the pipeline, therefore no units are displayed.
+My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0756. The result was transformed in the pipeline, therefore no units are displayed.
 
-[I got slighlty better results using one-hot encoded categorical Feats. Moreover, applying the Box-Cox transformation to numeric predictors helped too! When they are skewed, the fit is dramatically affected. Remember @fig-cont_linear.]{.column-margin}
+[I got slighlty better results using one-hot encoded categoricals. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-cherry_picking_feats.]{.column-margin}
 
-***To be continued...***
+## Predicting for First Kaggle Submission
+
+
+```{r}
+#| label: first_submission
+
+# Train Selected Model on the whole training set
+
+
+# Predicting on the test set
+
+
+
+# .csv for submission
+
+
+
+
+```
 
 Now that I have some reference RMSEs, I proceed to involve all predictors. Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a regularised (shrinkage) Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
 
