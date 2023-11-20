@@ -218,6 +218,9 @@ ames_all <- ames_all |>
   mutate(TotInteriorArea = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`) |>
   select(-c(BsmtFinSF1, BsmtFinSF2, `1stFlrSF`))|> # Bye bye...
 
+  # NEW HouseAge
+  # mutate(HouseAge = YrSold - YearBuilt) |>  # Same as YearBuilt
+
   # NEW TotalExteriorArea
   mutate(TotExteriorArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + `3SsnPorch` + ScreenPorch) |>
   select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, `3SsnPorch`, ScreenPorch)) |># Bye bye...
@@ -235,7 +238,7 @@ ames_all <- ames_all |>
 
 
 # ---- Binary Features ----
-# Does the installation exist? 
+# Does the installation or Feature exist? 
 
 ames_all <- ames_all |>
   # CentralAir
@@ -250,7 +253,7 @@ ames_all <- ames_all |>
   # NEW ExistPool  
   # mutate(ExistPool = if_else(PoolArea == 0, "No", "Yes")) |>
   # mutate(ExistPool = fct_relevel(ExistPool, "No", "Yes"))|>
-  # a dummy of PoolQC and PoolArea will makes this Feat. redundant!
+  # a dummy of PoolQC will make this Feat. redundant!
 
   # NEW ExistGarage
   mutate(ExistGarage = if_else(GarageArea == 0, "No", "Yes")) |>
@@ -267,14 +270,20 @@ ames_all <- ames_all |>
 
   # NEW ExistFireplace
   mutate(ExistFireplace = if_else(Fireplaces == 0, "No", "Yes")) |>
-  mutate(ExistFireplace = fct_relevel(ExistFireplace, "No", "Yes"))
+  mutate(ExistFireplace = fct_relevel(ExistFireplace, "No", "Yes")) |>
+
+  # NEW!!! Exist MasVnrArea: Masonry veneer area
+  mutate(ExistMasVeneer = if_else(MasVnrArea > 0, "Yes", "No")) |>
+  mutate(ExistMasVeneer = factor(ExistMasVeneer, levels = c("No", "Yes")))
+ 
 
 
 # ---- The rest are factors ----
 # I'm going to assume that the rest are Categorical variables 
 
 ames_all <- ames_all |>
-  mutate(across(where(is.character), factor))
+  mutate(across(where(is.character), factor)) |>
+  mutate(YrSold = factor(YrSold))  # Convert to factor
 
 # ---- Numerical Features ----
 
@@ -585,15 +594,11 @@ boxcox_trans <- MASS::boxcox(lm(SalePrice ~ 1,
                              lambda = seq(-1, 1), 
                              plotit = TRUE)
 
-lambda <- as.numeric(boxcox_trans$x[which.max(boxcox_trans$y)])
-
-# New transformed response variable
-ames_all <- ames_all |>
-  mutate(SalePrice_bc = (SalePrice^lambda - 1) / lambda)
+boxcox_lambda <- as.numeric(boxcox_trans$x[which.max(boxcox_trans$y)])
 
 ```
 
-The new column `SalePrice_bc` should be better behaved...
+The new temporal column (only for visualisation) `SalePrice_bc` should be better behaved...
 
 ```{r}
 #| label: fig-Y-trans
@@ -610,12 +615,14 @@ The new column `SalePrice_bc` should be better behaved...
 
 ames_all |>
   filter(dataset == "train") |>
+  mutate(SalePrice_bc = (SalePrice^boxcox_lambda - 1) / boxcox_lambda) |> # New transformed Y'
   ggplot(aes(x = SalePrice_bc)) +  
   geom_histogram(bins = 50, color = "seagreen", fill = "seagreen", alpha = 0.5) +  
   labs(x = "Sale Price [Box-Cox]")
 
 ames_all |>
   filter(dataset == "train") |> 
+  mutate(SalePrice_bc = (SalePrice^boxcox_lambda - 1) / boxcox_lambda) |> # New transformed Y'
   ggplot(aes(sample = SalePrice_bc)) + 
   stat_qq(color = "seagreen", alpha = 0.5) + 
   stat_qq_line(color = "seagreen") +   
@@ -641,7 +648,7 @@ This is a critical step for final model selection. Depending on the chosen resam
 
 By today's standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the *assessment set*. Although performance metrics will be slightly conservative or pesimistic, I prefer it.
 
-I will generate 1000 bootstrap-samples. 
+I will generate 200 bootstrap-samples. 
 
 ### Expending the data budget
 
@@ -660,8 +667,8 @@ tidymodels_prefer()
 # Select the pre-processed training dataset
 ames_train <- 
   ames_all |> 
-  filter(dataset == "train") |>
-  select(-SalePrice_bc)
+  filter(dataset == "train")
+ 
 
 # ---- v-folds Cross Validation ----
 
@@ -672,7 +679,7 @@ ames_train <-
 # ---- The Bootstrap ----
 
 set.seed(1982)
-ames_boots <- bootstraps(ames_train, times = 1000, strata = SalePrice)
+ames_boots <- bootstraps(ames_train, times = 200, strata = SalePrice)
 ames_boots  
 ```
 
@@ -693,6 +700,21 @@ For the sake of RMSE metric comparison I will always scale numeric predictors an
 The following code shows preprocessing steps enclosed in a pipeline or ***recipe***. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
 
 ```{r}
+#| label: fig-cherry_picking_feats
+#| fig-cap: "Correlated numerical predictors are skewed and contain zero values."
+
+ames_train |>  
+  select(c(GrLivArea, TotBaths, GarageCars, TotalBsmtSF, YearBuilt)) |> 
+  pivot_longer(GrLivArea:YearBuilt) |>
+  ggplot(aes(x = value)) +  
+  geom_histogram(bins = 50, color = "lightgrey", fill = "lightgrey") +  
+  labs(x = "") + 
+  facet_wrap(~name, scales = "free_x")
+```
+
+Given the sensitivity to tails and outliers of linear models, remember @fig-cont_linear-1, it will be convienent to try to normalise the distribution of these predictors. However, Box-Cox transformations work only for positive data. The alternative will be the more general **Yeo-Johnson transformation**, which works for both, positive and negative values.
+
+```{r}
 #| label: cherry-picking_lm
 
 # ---------- Preprocessing Pipelines ----------
@@ -700,15 +722,24 @@ The following code shows preprocessing steps enclosed in a pipeline or ***recipe
 # Uni-lm (simplest reasonable model)
 simplest_rec <-
   recipe(SalePrice ~ GrLivArea, data = ames_train) |>
-  step_BoxCox(all_numeric(), limits = c(-1, 1)) |> 
+  step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
+  step_YeoJohnsom(GrLivArea) |>
   step_scale(all_numeric_predictors())
+
+# Sanity check for warnings:
+# simplest_rec |> prep() |>  bake(new_data = NULL)
+
 
 # Multi-lm 
 multi_lm_rec <-
-  recipe(SalePrice ~ GrLivArea + TotBaths + GarageCars + TotalBsmtSF + YearBuilt + MasVnrArea + OverallQual + KitchenQual + ExistFireplace, data = ames_train) |>
-  step_BoxCox(all_numeric(), limits = c(-1, 1)) |> 
+  recipe(SalePrice ~ GrLivArea + TotBaths + GarageCars + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + ExistFireplace, data = ames_train) |>
+  step_BoxCox(SalePrice, limits = c(-1, 1)) |> 
+  step_YeoJohnson(all_numeric_predictors()) |>
   step_scale(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors())
+
+# Sanity check for warnings:
+# multi_lm_rec |> prep() |> bake(new_data = NULL)
 
 # GAM: Splines 
 multi_gam_rec <-
