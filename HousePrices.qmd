@@ -73,10 +73,13 @@ print("Dimensions of test dataset containing only Feats.")
 dim(ames_test_raw) 
 
 # Add Target column with NA so both DFs can be concatenated:.id
-ames_test_raw <- ames_test_raw |> mutate(SalePrice = NA)
+ames_test_raw <- 
+  ames_test_raw |> 
+    mutate(SalePrice = NA)
 
 # Binding and adding identifier column "dataset" 
-ames_all <- bind_rows(list(train = ames_train_raw, test = ames_test_raw), .id = "dataset")
+ames_all <- 
+  bind_rows(list(train = ames_train_raw, test = ames_test_raw), .id = "dataset")
 
 print("Available variables:")
 names(ames_all)
@@ -415,7 +418,11 @@ ames_all |>
   filter(GrLivArea > 4500) |>
   glimpse()
 
-ames_all <- ames_all |> filter(GrLivArea < 4500)
+idx_remove <- which(ames_all$dataset == "train" & ames_all$GrLivArea >4500)
+
+ames_all <-
+  ames_all |> 
+    filter(!row_number() %in% idx_remove)
 
 ames_all |>
   filter(dataset == "train") |>
@@ -433,7 +440,7 @@ ames_all |>
 
 ```
 
-The **three big houses above were like super offers!** Or did the housing bubble exploded?
+The **two big houses above were like super offers!** Or did the housing bubble exploded?
 
 In the same fashion, I want to see the effect of the factor `OverallQual`.
 
@@ -595,9 +602,13 @@ boxcox_trans <- MASS::boxcox(lm(SalePrice ~ 1,
 
 boxcox_lambda <- as.numeric(boxcox_trans$x[which.max(boxcox_trans$y)])
 
+# New transformed response variable
+ames_all <- ames_all |>
+  mutate(SalePrice = (SalePrice^boxcox_lambda - 1) / boxcox_lambda)
+
 ```
 
-The new temporal column (only for visualisation) `SalePrice_bc` should be better behaved...
+The new mutated `SalePrice` should be better behaved...
 
 ```{r}
 #| label: fig-Y-trans
@@ -613,16 +624,14 @@ The new temporal column (only for visualisation) `SalePrice_bc` should be better
 #| layout-ncol: 2
 
 ames_all |>
-  filter(dataset == "train") |>
-  mutate(SalePrice_bc = (SalePrice^boxcox_lambda - 1) / boxcox_lambda) |> # New transformed Y'
-  ggplot(aes(x = SalePrice_bc)) +  
+  filter(dataset == "train") |>  
+  ggplot(aes(x = SalePrice)) +  
   geom_histogram(bins = 50, color = "seagreen", fill = "seagreen", alpha = 0.5) +  
   labs(x = "Sale Price [Box-Cox]")
 
 ames_all |>
-  filter(dataset == "train") |> 
-  mutate(SalePrice_bc = (SalePrice^boxcox_lambda - 1) / boxcox_lambda) |> # New transformed Y'
-  ggplot(aes(sample = SalePrice_bc)) + 
+  filter(dataset == "train") |>  
+  ggplot(aes(sample = SalePrice)) + 
   stat_qq(color = "seagreen", alpha = 0.5) + 
   stat_qq_line(color = "seagreen") +   
   labs(y = "Sale\nPrice\n[Box-Cox]", x = "Theoretical Quantiles (Norm. Dist.)")
@@ -630,7 +639,7 @@ ames_all |>
 
 ... and it is, indeed. Well, except for the tails, now the transformed values are more normal-like at the core.
 
-**I will include the *transformation of the response* as a step within a recipe in the modelling phase.**
+[**Do not include the transformation of the response as a step within the recipe.** It will cause an [error](https://github.com/tidymodels/recipes/issues/1033) with the *predict* function trying to locate `SalePrice` in the test dataset.]{.column-margin}
 
 # PHASE 2: MODELLING
 
@@ -647,7 +656,7 @@ This is a critical step for final model selection. Depending on the chosen resam
 
 By today's standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the *assessment set*. Although performance metrics will be slightly conservative or pesimistic, I prefer it.
 
-I will generate 200 bootstrap-samples. 
+I will generate 1000 bootstrap-samples. 
 
 ### Expending the data budget
 
@@ -713,6 +722,8 @@ ames_train |>
 
 Given the sensitivity to tails and outliers of linear models, remember @fig-cont_linear-1, it will be convienent to try to normalise the distribution of these predictors. However, Box-Cox transformations work only for positive data. The alternative will be the more general **Yeo-Johnson transformation**, which works for both, positive and negative values.
 
+[Note that `SalePrice` is already transformed. See [here](https://www.tmwr.org/recipes.html#skip-equals-true)]{.column-margin}
+
 ```{r}
 #| label: cherry-picking_lm
 
@@ -720,8 +731,7 @@ Given the sensitivity to tails and outliers of linear models, remember @fig-cont
 
 # Uni-lm (simplest reasonable model)
 simplest_rec <-
-  recipe(SalePrice ~ GrLivArea, data = ames_train) |>
-  step_BoxCox(SalePrice) |> 
+  recipe(SalePrice ~ GrLivArea, data = ames_train) |>  
   step_YeoJohnson(GrLivArea) |>
   step_scale(all_numeric_predictors())
 
@@ -731,8 +741,7 @@ simplest_rec <-
 
 # Multi-lm 
 multi_lm_rec <-
-  recipe(SalePrice ~ GrLivArea + TotBaths + GarageArea + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + Foundation + ExistFireplace + HeatingQC, data = ames_train) |>
-  step_BoxCox(SalePrice) |> 
+  recipe(SalePrice ~ GrLivArea + TotBaths + GarageArea + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + Foundation + ExistFireplace + HeatingQC, data = ames_train) |>  
   step_YeoJohnson(all_numeric_predictors()) |>
   step_scale(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors())
@@ -778,28 +787,48 @@ ames_lms_res |>
 
 OK! We can see the power of adding good predictors.
 
-My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0756. The result was transformed in the pipeline, therefore no units are displayed.
+My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0806. The result was transformed in the pipeline, therefore no units are displayed.
 
 [I got slighlty better results using one-hot encoded categoricals. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-cherry_picking_feats.]{.column-margin}
 
-## Predicting for First Kaggle Submission
+In order to see the feature importance, I'll train and extract the workflow of the simple, second model:
 
+```{r}
+#| label: lm_best_feats
+#| column: margin
+
+ames_lms_res |>
+  extract_workflow("recipe_2_linear_reg") |>
+  fit(ames_train) |>
+  tidy()
+```
+
+## Predicting for First Kaggle Submission
 
 ```{r}
 #| label: first_submission
+#| warning: false
 
-# Train Selected Model on the whole training set
-
+# Get best model and fit with whole training set
+fit_lm_bsplines <- 
+  extract_workflow(ames_lms_res, "recipe_3_linear_reg") |>
+  fit(ames_train)
 
 # Predicting on the test set
+ames_test <- 
+  ames_all |>
+  select(-SalePrice) |>
+  filter(dataset == "test")
 
-
+res_1_bsplines <- 
+  predict(fit_lm_bsplines, ames_test) |>
+  mutate(SalePrice_pred = inv_boxcox(.pred, boxcox_lambda))
 
 # .csv for submission
 
+sub_1 <- data.frame(Id = ames_test$Id, SalePrice = res_1_bsplines$SalePrice_pred)
 
-
-
+write.csv(sub_1, "./data/submissions/sub_1_splines.csv", quote = FALSE, row.names = FALSE)
 ```
 
 Now that I have some reference RMSEs, I proceed to involve all predictors. Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a regularised (shrinkage) Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
