@@ -410,15 +410,16 @@ On the other hand, note how **problematic are the outliers** with the spline fit
 
 ```{r}
 #| label: fig-RemoveOutliers
-#| fig-cap: Removing three outliers the spline fit is dramatically improved!
+#| fig-cap: Removing two outliers from the training dataset part the spline fit is dramatically improved!
 #| column: margin
 
 ames_all |>
+  filter(dataset == "train") |>
   select(c(SalePrice, GrLivArea, OverallQual, YrSold)) |>
   filter(GrLivArea > 4500) |>
   glimpse()
 
-idx_remove <- which(ames_all$dataset == "train" & ames_all$GrLivArea >4500)
+idx_remove <- which(ames_all$dataset == "train" & ames_all$GrLivArea > 4500)
 
 ames_all <-
   ames_all |> 
@@ -604,7 +605,7 @@ boxcox_lambda <- as.numeric(boxcox_trans$x[which.max(boxcox_trans$y)])
 
 # New transformed response variable
 ames_all <- ames_all |>
-  mutate(SalePrice = (SalePrice^boxcox_lambda - 1) / boxcox_lambda)
+  mutate(SalePrice_bc = (SalePrice^boxcox_lambda - 1) / boxcox_lambda)
 
 ```
 
@@ -625,13 +626,13 @@ The new mutated `SalePrice` should be better behaved...
 
 ames_all |>
   filter(dataset == "train") |>  
-  ggplot(aes(x = SalePrice)) +  
+  ggplot(aes(x = SalePrice_bc)) +  
   geom_histogram(bins = 50, color = "seagreen", fill = "seagreen", alpha = 0.5) +  
   labs(x = "Sale Price [Box-Cox]")
 
 ames_all |>
   filter(dataset == "train") |>  
-  ggplot(aes(sample = SalePrice)) + 
+  ggplot(aes(sample = SalePrice_bc)) + 
   stat_qq(color = "seagreen", alpha = 0.5) + 
   stat_qq_line(color = "seagreen") +   
   labs(y = "Sale\nPrice\n[Box-Cox]", x = "Theoretical Quantiles (Norm. Dist.)")
@@ -658,7 +659,7 @@ By today's standards this dataset is small, therefore I will choose Bootstraping
 
 I will generate 1000 bootstrap-samples. 
 
-### Expending the data budget
+## Expending the data budget
 
 Normally with v-fold CV I expend my data budget, but here doing resampling with replacement is kind of printing money... Here's the code to generate the bootstraps and therefore split the data budget:
 
@@ -667,7 +668,6 @@ Normally with v-fold CV I expend my data budget, but here doing resampling with 
 #| warning: false
 #| fold: false
 
-# install.packages("tidymodels")
 library(tidymodels)
 tidymodels_prefer()
 # conflicted::conflicts_prefer(scales::discard)
@@ -681,29 +681,31 @@ ames_train <-
 # ---- v-folds Cross Validation ----
 
 # v-folds CV repeated 10 times (v x 10 models)
-# set.seed(1982)
-# ames_folds <- vfold_cv(ames_train, v = 8, repeats = 10, strata = SalePrice) # v = 10 folds are default
+set.seed(1982)
+ames_folds <- vfold_cv(ames_train, v = 10, repeats = 10, strata = SalePrice_bc) # v = 10 folds are default
 
 # ---- The Bootstrap ----
 
 set.seed(1982)
-ames_boots <- bootstraps(ames_train, times = 1000, strata = SalePrice)
+ames_boots <- bootstraps(ames_train, times = 1000, strata = SalePrice_bc)
 ames_boots  
 ```
 
-## Base Models
+## Base Worflows Set
 
-My final objective is to stack (combine or ensemble) several models of different nature. However, for a first model I'd like to keep interpretability. 
+My final objective is to stack (combine / ensemble) several models of different nature. However, for a first model I'd like to keep interpretability. 
+
+### Linear Models
 
 **Where to start?** In order to have a set of refence good models, I will proceed as follows:
 
 - Cherry-picking predictors with linear influence from correlograms @fig-num-corr and @fig-cat-corr.
 - Establish a ***workflow set*** of linear models:
-  - Simplest OLS univariate lm `GrLivArea` vs. `SalePrice`.
+  - Fit the simplest OLS univariate lm `GrLivArea` vs. `SalePrice`.
   - Cherry-pick predictors and fit a linear hyper-plane: multivariate lm.
-  - Add some flexibility on top with a Spline GAM.
+  - Add some flexibility on top fitting a Spline GAM.
 
-For the sake of RMSE metric comparison I will always scale numeric predictors and apply the Box-Cox transformation to the outcome `SalePrice`, this given the improvement shown in @fig-Y-trans. 
+For the sake of RMSE metric comparison I will always scale numeric predictors and use the Box-Cox transformed response `SalePrice_bc`, this given the improvement shown in @fig-Y-trans. 
 
 The following code shows preprocessing steps enclosed in a pipeline or ***recipe***. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
 
@@ -717,12 +719,12 @@ ames_train |>
   ggplot(aes(x = value)) +  
   geom_histogram(bins = 50, color = "lightgrey", fill = "lightgrey") +  
   labs(x = "") + 
-  facet_wrap(~name, scales = "free_x")
+  facet_wrap(~name, scales = "free")
 ```
 
 Given the sensitivity to tails and outliers of linear models, remember @fig-cont_linear-1, it will be convienent to try to normalise the distribution of these predictors. However, Box-Cox transformations work only for positive data. The alternative will be the more general **Yeo-Johnson transformation**, which works for both, positive and negative values.
 
-[Note that `SalePrice` is already transformed. See [here](https://www.tmwr.org/recipes.html#skip-equals-true)]{.column-margin}
+[Note that `SalePrice_bc` is the transformed outcome. Click [here](https://www.tmwr.org/recipes.html#skip-equals-true) for more info.]{.column-margin}
 
 ```{r}
 #| label: cherry-picking_lm
@@ -731,7 +733,7 @@ Given the sensitivity to tails and outliers of linear models, remember @fig-cont
 
 # Uni-lm (simplest reasonable model)
 simplest_rec <-
-  recipe(SalePrice ~ GrLivArea, data = ames_train) |>  
+  recipe(SalePrice_bc ~ GrLivArea, data = ames_train) |>  
   step_YeoJohnson(GrLivArea) |>
   step_scale(all_numeric_predictors())
 
@@ -741,7 +743,7 @@ simplest_rec <-
 
 # Multi-lm 
 multi_lm_rec <-
-  recipe(SalePrice ~ GrLivArea + TotBaths + GarageArea + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + Foundation + ExistFireplace + HeatingQC, data = ames_train) |>  
+  recipe(SalePrice_bc ~ GrLivArea + TotBaths + GarageArea + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + Foundation + ExistFireplace + HeatingQC, data = ames_train) |>  
   step_YeoJohnson(all_numeric_predictors()) |>
   step_scale(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors())
@@ -756,7 +758,6 @@ multi_gam_rec <-
 
 
 # ---------- Model specification ----------
-
 lm_spec <- 
   linear_reg() |>
   set_mode("regression") |>
@@ -764,7 +765,6 @@ lm_spec <-
 
 
 # ---------- Set of Workflows ----------  
-
 my_lm_recipes <- list(simplest_rec, multi_lm_rec, multi_gam_rec)
 my_lms <- list(lm_spec)
 
@@ -774,7 +774,6 @@ ames_wfset
 
 
 # ---------- Fit Bootstraps ----------
-
 doParallel::registerDoParallel()
 set.seed(1982)
 
@@ -785,13 +784,13 @@ ames_lms_res |>
   filter(.metric == "rmse")
 ```
 
-OK! We can see the power of adding good predictors.
+OK! We can see the power of adding good predictors in the test RMSE estimation
 
-My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0806. The result was transformed in the pipeline, therefore no units are displayed.
+My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0812. The result was transformed in the pipeline, therefore no units are displayed.
 
 [I got slighlty better results using one-hot encoded categoricals. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-cherry_picking_feats.]{.column-margin}
 
-In order to see the feature importance, I'll train and extract the workflow of the simple, second model:
+In order to see the feature importance, I'll train and extract the workflow of the simple, second model, i.e., the multivariate lm:
 
 ```{r}
 #| label: lm_best_feats
@@ -799,11 +798,14 @@ In order to see the feature importance, I'll train and extract the workflow of t
 
 ames_lms_res |>
   extract_workflow("recipe_2_linear_reg") |>
-  fit(ames_train) |>
-  tidy()
+  fit(ames_train) |>  
+  tidy() |> 
+  select(-statistic) |>
+  arrange(-abs(estimate)) |>
+  slice_head(n = 15)
 ```
 
-## Predicting for First Kaggle Submission
+Here is the code to extract the best model workflow, retrain with the whole training set, predicting and writing the submission .csv file:
 
 ```{r}
 #| label: first_submission
@@ -822,153 +824,173 @@ ames_test <-
 
 res_1_bsplines <- 
   predict(fit_lm_bsplines, ames_test) |>
-  mutate(SalePrice_pred = inv_boxcox(.pred, boxcox_lambda))
+  mutate(SalePrice_pred = inv_boxcox(.pred, boxcox_lambda))  # orignal values in USD
 
 # .csv for submission
-
 sub_1 <- data.frame(Id = ames_test$Id, SalePrice = res_1_bsplines$SalePrice_pred)
-
-write.csv(sub_1, "./data/submissions/sub_1_splines.csv", quote = FALSE, row.names = FALSE)
+# write.csv(sub_1, "./data/submissions/sub_1_splines.csv", quote = FALSE, row.names = FALSE)
 ```
 
-Now that I have some reference RMSEs, I proceed to involve all predictors. Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a regularised (shrinkage) Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
+#### First Kaggle Submission and Result
 
-I'll choose Elastic net regression. Features must be scaled! I don't want to over-penalised non-scaled variables using shrinkage methods.
+Ok! I got on the **top 59% (2825/4819)** cherry picking predictors and a GAM of splines. Not great as expected but an important referece.
+
+Now that I have some reference, I'll proceed with more complexity and involving all predictors in order to extract more signal. 
+
+## Advanced Workflows
+
+Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a regularised (shrinkage) Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
+
+I'll choose Elastic Net regression. Features must be scaled! I don't want to over-penalised non-scaled variables using shrinkage methods.
 
 ```{r}
 #| label: Preprocessing
 
-# shrinkage_rec <-
-#   recipe(SalePrice ~ ., data = ames_train) |>
-#   update_role(Id, new_role = "Id variabe") |>
-#   update_role(dataset, new_role = "splitting variable") |>
-#   step_BoxCox(SalePrice, limits = c(-1, 1)) |>  
-#   step_scale(all_numeric_predictors()) |>
-#   step_dummy(all_nominal_predictors()) |>  
-#   step_zv(all_predictors())
+allfeats_rec <-
+  recipe(SalePrice_bc ~ ., data = ames_train) |>
+  update_role(Id, new_role = "Id variabe") |>
+  update_role(SalePrice, new_role = "original outcome") |>
+  update_role(dataset, new_role = "splitting variable") |>
+  step_YeoJohnson(all_numeric_predictors()) |>
+  step_scale(all_numeric_predictors()) |>
+  step_dummy(all_nominal_predictors()) |>    
+  step_zv(all_predictors())
 
+# allfeats_rec |> prep() |> bake(new_data = NULL) 
 # shrinkage_spline_rec <-
 #   shrinkage_rec |>
 #   step_bs(all_numeric_predictors())  
 
-
-
-# Recipe for trees  
-# dummy_recipe <-
-#   base_recipe |>
-#   step_dummy(all_nominal_predictors())
-
-# Recipe for splines
-# spline_recipe <-
-#   dummy_recipe |>
-#   step_bs(GrLivArea)
 ```
 
+### Assessment with Elastic-Net
+
+#### Specifications and Tuning
 
 ```{r}
-#| label: ElasticNetSpecs
+#| label: Elastic_net-set-tune
+#| eval: false	
+
+library(usemodels)  # CheatSheets
+
+# Model: Elastic Net -------------
+glmnet_spec <-
+  linear_reg(penalty = tune(), mixture = tune()) |> 
+  set_engine("glmnet") |>
+  set_mode("regression")
+  # translate()
+
+glmnet_wf <-
+  workflow() |>
+  add_recipe(allfeats_rec) |>
+  add_model(glmnet_spec)
+
+# penalty = lambda; mixture = alpha
+glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), 
+                               mixture = c(0.05, 0.2, 0.4, 0.6, 0.8, 1))
+
+set.seed(1982)
+doParallel::registerDoParallel()
+
+glmnet_tune <- tune_grid(glmnet_wf, resamples = ames_folds, grid = glmnet_grid)
+
+# Explore Results 
+show_best(glmnet_tune, metric = "rmse")
+
+# Set best parameters
+final_glmnet <- glmnet_wf |>
+  finalize_workflow(select_best(glmnet_tune, metric = "rmse"))
+
+final_glmnet
+
+save(final_glmnet, file = "./models/final_models/final_glmnet.Rdata")
+# final_glmnet <- load("./models/final_models/final_glmnet.Rdata")
+
+```
+
+Load Elastic-Net workflow with best parameters:
+
+```{r}
+#| label: final_glmnet
 #| code-fold: false
 
-# install.packages(c("ranger", "earth", "glmnet"))
+final_glmnet <- load("./models/final_models/final_glmnet.Rdata")
+final_glmnet
 
-# Linear Model
-# lm_spec <- 
-#   linear_reg() |>
-#   set_mode("regression") |>
-#   set_engine("lm")
+# glmnet_boot_fit <- 
+#   final_glmnet |> 
+#   fit_resamples(resamples = ames_boots)
+  
+# glmnet_boot_fit |>
+#   collect_metrics(summarize = TRUE)
 
+```
 
-# Linear Model penalised
-# elnet_spec <-
-#   linear_reg(penalty = tune(), mixture = tune()) |> # penalty = lambda; mixture = alpha
-#   set_mode("regression") |>
-#   set_engine("glmnet")
+A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were the best parameters. What a pitty such a low penalty, almost a full linear model.
 
-# elnet_grid <- expand_grid(penalty = seq(0, 100, by = 10),
-#                           mixture = seq(0, 1, by = 0.2) )
+For curiosity, I fitted the 1000 bootstraps to the **elastic net model** (code above) obtaining a mean RMSE = 0.0652. Best so far...
 
+### Assessment with Random Forest
+
+#### Specifications and Tuning
+
+```{r}
+#| label: Random_Forest-set-tune
+#| eval: false
+
+rf_spec <-
+  rand_forest(mtry = tune(), trees = 1000, min_n = tune()) |>
+  set_engine("ranger") |>
+  set_mode("regression")
+
+rf_wf <- workflow() |>
+  add_recipe(allfeats_rec) |>
+  add_model(rf_spec)
+
+# Hyperparameters tuning ---
+set.seed(1982)
+doParallel::registerDoParallel()
+
+rf_tune <- tune_grid(rf_wf,                     
+                    resamples = ames_folds, 
+                    grid = 10)
+
+# Explore Results
+show_best(rf_tune, metric = "rmse")
+
+#  26 minutes Aprox. ---
+
+# Set best parameters
+final_rf <- rf_wf |>
+  finalize_workflow(select_best(rf_tune, metric = "rmse"))
+
+final_rf
+
+save(final_rf, file = "./models/final_models/final_rf.Rdata")
+# final_rf <- load("./models/final_models/final_rf.Rdata")
+```
+
+Load Random Forest workflow with best parameters:
+
+```{r}
+#| label: final_rf
+#| code-fold: false
+
+final_rf <- load("./models/final_models/final_rf.Rdata")
+final_rf
+
+# Test error estimation using the bootstraps
 
 # doParallel::registerDoParallel()
 # set.seed(1982)
 
-# elnet_tune_res <- tune_grid(elnet_spec, 
-#                             preprocessor = shrinkage_spline_rec, 
-#                             grid = elnet_grid, 
-#                             resamples = ames_boots)
-
-# elnet_tune_res |>
-#   collect_metrics() |>
-#   filter(.metric == "rmse") |>
-#   arrange(mean)
-
-
-# elnet_tune_res |>
-#   collect_metrics() |>
-#   filter(.metric == "rmse") |>
-#   ggplot(aes(penalty, mean, color = factor(mixture), group = factor(mixture))) + 
-#   geom_point() + 
-#   geom_line() + 
-#   labs(y = "RMSE")
- 
-# elnet_spec <-
-#   linear_reg(penalty = 10, mixture = 0) |> # penalty = lambda; mixture = alpha
-#   set_mode("regression") |>
-#   set_engine("glmnet")
+# final_rf |> 
+#   fit_resamples(resamples = ames_boots) |>
+#   collect_metrics(summarize = TRUE)
 
 ```
 
-```{r}
-#| label: OtherModelsSpecs
-
-# linear_reg(mixture = .1) %>% 
-#   set_engine("glmnet") %>% 
-#   translate()
-
-
-# # Model 2 Setup
-# spec_lm <- 
-#   linear_reg() |>
-#   set_engine("lm") |>
-#   set_mode("regression")
-
-# # Model 3
-# spec_rf <-
-#   rand_forest(trees = 1000) |>
-#   set_engine("ranger") |>
-#   set_mode("regression")
-  
-# # Model 4
-# spec_mars <-
-#   mars() |>
-#   set_engine("earth") |>
-#   set_mode("regression")
-
-```
-
-
-
-
-```{r}
-
-# Workflow set
-
-# Allows combine different pre-processors and models fit them all at once and compare results
-
-# my_recipes <- list(base_recipe, dummy_recipe, spline_recipe)
-# my_models <- list(spec_rf, spec_mars, spec_lm)
-
-# my_recipes <- list(num_uni_lm_rec, num_mul_lm_rec, num_mul_gam_rec)
-# my_models <- list(lm_spec, lm_spec, lm_spec)
-
-# ames_wfset <- 
-#   workflow_set(
-#     my_recipes, 
-#     my_models, 
-#     cross = FALSE, 
-#     case_weights = NULL)
-
-# ames_wfset
-```
+For curiosity, I fitted the 1000 bootstraps to the **best rf candidate** (code above) obtaining a mean RMSE = 0.0772
 
 
 ```{r}
@@ -986,13 +1008,11 @@ I'll choose Elastic net regression. Features must be scaled! I don't want to ove
 #   filter(.metric == "rmse")
 
 
-
 # save(ames_results, file = "./models/ames_results_wf.Rdata")
 
 # ames_results <- load("./models/ames_results_wf.Rdata")
 
 ```
-
 
 
 ```{r}
@@ -1012,69 +1032,22 @@ I'll choose Elastic net regression. Features must be scaled! I don't want to ove
 ```
 
 
-## Full Width Figures
-
-You can arrange for figures to span across the entire page by using the chunk option `fig-column: page-right`.
-
-```{r}
-#| label: fig-fullwidth
-#| fig-cap: "A full width figure."
-#| fig-width: 11
-#| fig-height: 3
-#| fig-column: page-right
-#| warning: false
-ggplot(diamonds, aes(carat, price)) + geom_smooth() +
-  facet_grid(~ cut)
-```
-
-Other chunk options related to figures can still be used, such as `fig-width`, `fig-cap`, and so on. For full width figures, usually `fig-width` is large and `fig-height` is small. In the above example, the plot size is $11 \times 3$.
 
 ## Arbitrary Full Width Content
-
-Any content can span to the full width of the page, simply place the element in a `div` and add the class `column-page-right`. For example, the following code will display its contents as full width.
-
-``` md
-::: {.fullwidth}
-Any _full width_ content here.
-:::
-```
-
-Below is an example:
 
 ::: column-page-right
 *R is free software and comes with ABSOLUTELY NO WARRANTY.* You are welcome to redistribute it under the terms of the GNU General Public License versions 2 or 3. For more information about these matters see <https://www.gnu.org/licenses/>.
 :::
 
 
-## Margin Captions
-
-When you include a figure constrained to the main column, you can choose to place the figure's caption in the margin by using the `cap-location` chunk option. For example:
-
-```{r}
-#| label: fig-main-margin-cap
-#| fig-cap: "A figure with a longer caption. The figure appears in the main column, but the caption is placed in the margin. Captions can even contain elements like a citation such as @R-base."
-#| cap-location: margin
-ggplot(diamonds, aes(cut, price)) + geom_boxplot()
-```
-
 # Sidenotes
 
-[This is a span that has the class `column-margin` which places it in the margin without the sidenote mark.]{.column-margin} If you'd like to place ancillary information in the margin without the sidenote mark (the superscript number), you can use apply the `column-margin` class to the element.
-
-References can be displayed as margin notes for HTML output. For example, we can cite R here [@R-base].
+cite R here [@R-base].
 
 ::: {.callout-note appearance="simple"}
 This feature depends upon `link-citations` to locate and place references in the margin. This is enabled by default, but if you disable `link-citations` then references in the HTML output will be placed at the end of the output document as they normally are.
 :::
 
-
-Then two plots in separate figure environments (the code is identical to the previous code chunk, but the chunk option is the default `fig-show: asis` now):
-
-```{r fig-two-separate, ref.label='fig-two-together', fig.cap=sprintf("Two plots in separate figure environments (the %s plot).", c("first", "second")), message=FALSE}
-#| cap-location: margin
-```
-
-You may have noticed that the two figures have different captions, and that is because we used a character vector of length 2 for the chunk option `fig.cap` (something like `fig.cap = c('first plot', 'second plot')`).
 
 ::: {.callout-tip}
 ## Using R within Chunk Options
