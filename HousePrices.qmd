@@ -87,7 +87,7 @@ names(ames_all)
 
 In order to organise my **Data Budget** I count on the **train dataset** with 1460 Observations of 79 predictors (one column is only an `Id` per house) and the Response, which is the `SalePrice` of the houses at the end of the list above.
 
-Note that `Id` and the just added `dataset` columns are not predictors. Hence, there are **79 features** to play  with. Also rememeber that the number of features for modelling will vary. Some will be discarded and some will be created along the analysis.
+Note that `Id` and the just added `dataset` columns are not predictors. Hence, there are **78 features** to play  with. Also rememeber that the number of features for modelling will vary. Some will be discarded and some will be created along the analysis.
 
 ## Impute Missing Values
 
@@ -200,9 +200,9 @@ After that, I check the [data documentation](https://www.kaggle.com/competitions
 
 After 1.5 hours of reading, googling, understanding other notebooks and deliberating (yes, it was tedeous), I can summarise four types of ways to engineer new features depending on the nature of the variables:
 
-1. Aggregation to a total of **continous-numerical** surface area (Square Feet), e.g. new `TotInteriorArea` Feat. summing basement and floors, etc. Same for a new `TotExteriorArea`. Then deleting the addends variables.
+1. Aggregation to a total of **continuous-numerical** surface area (Square Feet), e.g. new `TotInteriorArea` Feat. summing basement and floors, etc. Same for a new `TotExteriorArea`. Then deleting the addends variables.
 
-2. Aggregation to a total of **numerical counts** of an available installation of a determined type, e.g. new `TotBaths`. Then deleting the addends.
+2. Aggregation to a total of **counts-numerical** of an available installation of a determined type, e.g. new `TotBaths`. Then deleting the addends.
 
 3. Categorisation with ascending quality levels of the originally numerical variables `OverallQual` and `OverallCond`. 
 
@@ -481,7 +481,7 @@ ames_all |>
   count(OverallQual, name = "count") |>
   ggplot(aes(y = fct_reorder(OverallQual, count), x = count)) + 
   geom_col(aes(fill = OverallQual)) +
-  geom_text(aes(label = count)) +
+  geom_text(aes(label = count), size = 10) +
   labs(y = "Overall Quality") + 
   theme(legend.position = "none", axis.title.y = element_text(angle = 90))
 ```
@@ -496,11 +496,10 @@ Now I'll group or lump into one category `OverallQual = 1` and `OverallQual = 2`
 ames_all <- 
   ames_all |>
   mutate(OverallQual = fct_lump(OverallQual, n = 8)) |>
-  mutate(OverallQual = fct_relevel(OverallQual, "Other")) 
-  
+  mutate(OverallQual = fct_relevel(OverallQual, "Other"))  
 ```
 
-#### How the sale price varies depending on the living area by house styles?
+#### How sale prices vary with the living area and depending on house styles?
 
 ```{r}
 #| label: fig-houseStyles
@@ -524,6 +523,50 @@ ames_all |>
               alpha = 0.5) +
   facet_wrap(~HouseStyle, nrow = 2) +
   theme(legend.position = "bottom")
+
+```
+
+#### How sale prices vary with the living area and depending on location?
+
+One can hear often that *location is everything*; let's see here:
+
+```{r}
+
+#| label: fig-houseLocations
+#| fig-column: page-right
+#| fig-cap: "There's a lot of variation depending on location, as expected. Northridge (NoRidge), College Creek (CollgCr) and Northridge Heights (NridgHt) seem to be the most expensive neighbourhoods."
+
+ames_all |>
+  filter(dataset == "train") |>
+  ggplot(aes(x = GrLivArea, y = SalePrice/1000)) +  
+  scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +  
+  labs(x = expression("Ground Living Area ["~ft^2~"]"), 
+       y = "Sale\nPrice\n['000 $]") +  
+  geom_point(aes(color = OverallQual), alpha = 0.3) +
+  geom_smooth(method = "lm", 
+              formula =  y ~ splines::bs(x, 3), 
+              color = "black",
+              se = FALSE,
+              size = 0.7, 
+              alpha = 0.5) +
+  facet_wrap(~Neighborhood, nrow = 3) +
+  theme(legend.position = "bottom")
+```
+
+### Variable importance screening
+
+Using the **Mutual Information (MI)** criterion I'll rank the extent to which knowledge of one predictor reduces the uncertainty of `SalePrice`.
+
+```{r}
+#| label: mutual-info
+library(infotheo)
+
+ames_all |>
+  filter(dataset == "train") |>
+  select(-c(Id, dataset)) |>
+  calc_mi(target = "SalePrice") |>
+  head(15) |>
+  knitr::kable(caption = "Feat. Importance Screening")
 
 ```
 
@@ -735,7 +778,7 @@ Given the sensitivity to tails and outliers of linear models, remember @fig-cont
 simplest_rec <-
   recipe(SalePrice_bc ~ GrLivArea, data = ames_train) |>  
   step_YeoJohnson(GrLivArea) |>
-  step_scale(all_numeric_predictors())
+  step_normalize(all_numeric_predictors())
 
 # Sanity check for warnings:
 # simplest_rec |> prep() |>  bake(new_data = NULL)
@@ -745,7 +788,7 @@ simplest_rec <-
 multi_lm_rec <-
   recipe(SalePrice_bc ~ GrLivArea + TotBaths + GarageArea + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + Foundation + ExistFireplace + HeatingQC, data = ames_train) |>  
   step_YeoJohnson(all_numeric_predictors()) |>
-  step_scale(all_numeric_predictors()) |>
+  step_normalize(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors())
 
 # Sanity check for warnings:
@@ -766,10 +809,10 @@ lm_spec <-
 
 # ---------- Set of Workflows ----------  
 my_lm_recipes <- list(simplest_rec, multi_lm_rec, multi_gam_rec)
-my_lms <- list(lm_spec)
+my_lms_specs <- list(lm_spec)
 
 # With a workflow set I can combine a list of pre-processors with a list of models:
-ames_wfset <- workflow_set(my_lm_recipes, my_lms, cross = TRUE, case_weights = NULL)
+ames_wfset <- workflow_set(my_lm_recipes, my_lms_specs, cross = TRUE, case_weights = NULL)
 ames_wfset
 
 
@@ -779,9 +822,19 @@ set.seed(1982)
 
 ames_lms_res <- workflow_map(ames_wfset, "fit_resamples", resamples = ames_boots)
 
+save(ames_lms_res, file = "./models/trained_resamples/ames_lms_res.Rdata")
+
+# Load fitted Bootstraps
+
+# ames_lms_res <- load(file = "./models/trained_resamples/ames_lms_res.Rdata")
+
 ames_lms_res |>  
   collect_metrics(summarize = TRUE) |>
-  filter(.metric == "rmse")
+  select(-c(.estimator, .config)) |>
+  filter(.metric == "rmse") |>
+  knitr::kable(caption = "3 Base lms")
+
+
 ```
 
 OK! We can see the power of adding good predictors in the test RMSE estimation
@@ -802,7 +855,8 @@ ames_lms_res |>
   tidy() |> 
   select(-statistic) |>
   arrange(-abs(estimate)) |>
-  slice_head(n = 15)
+  slice_head(n = 15) |> 
+  knitr::kable(caption = 'Multi-lm')  
 ```
 
 Here is the code to extract the best model workflow, retrain with the whole training set, predicting and writing the submission .csv file:
@@ -810,6 +864,7 @@ Here is the code to extract the best model workflow, retrain with the whole trai
 ```{r}
 #| label: first_submission
 #| warning: false
+#| eval: false
 
 # Get best model and fit with whole training set
 fit_lm_bsplines <- 
@@ -833,33 +888,67 @@ sub_1 <- data.frame(Id = ames_test$Id, SalePrice = res_1_bsplines$SalePrice_pred
 
 #### First Kaggle Submission and Result
 
-Ok! I got on the **top 59% (2825/4819)** cherry picking predictors and a GAM of splines. Not great as expected but an important referece.
+Ok! I got on the **top 59% (2825/4819)** cherry picking predictors and a GAM of splines. Not great, as expected, but it's an important referece.
 
 Now that I have some reference, I'll proceed with more complexity and involving all predictors in order to extract more signal. 
 
 ## Advanced Workflows
 
-Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a regularised (shrinkage) Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
+Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
 
-I'll choose Elastic Net regression. Features must be scaled! I don't want to over-penalised non-scaled variables using shrinkage methods.
+I'll choose Elastic Net regression, combining the best of Lasso and Ridge. I must remember to myself that *predictors* must be scaled! I don't want to over-penalised non-scaled variables using shrinkage methods.
 
 ```{r}
 #| label: Preprocessing
 
-allfeats_rec <-
+# Elastic Net
+glmnet_base_rec <-
   recipe(SalePrice_bc ~ ., data = ames_train) |>
-  update_role(Id, new_role = "Id variabe") |>
+  update_role(Id, new_role = "Id variable") |>
   update_role(SalePrice, new_role = "original outcome") |>
   update_role(dataset, new_role = "splitting variable") |>
-  step_YeoJohnson(all_numeric_predictors()) |>
-  step_scale(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors()) |>    
+  step_YeoJohnson(all_numeric_predictors()) |>
+  step_normalize(all_numeric_predictors()) |>
   step_zv(all_predictors())
 
-# allfeats_rec |> prep() |> bake(new_data = NULL) 
+# glmnet_base_rec |> prep() |> bake(new_data = NULL) 
+
+lm_pca_rec <- 
+  glmnet_base_rec |>
+  # step_pca(all_numeric_predictors(), num_comp = tune()) |>
+  step_pca(all_numeric_predictors(), threshold = 0.90) |>
+  step_normalize(all_numeric_predictors())
+
+# lm_pca_rec |> prep(verbose = TRUE) |> bake(new_data = NULL) 
+
+
+
+
+
 # shrinkage_spline_rec <-
 #   shrinkage_rec |>
 #   step_bs(all_numeric_predictors())  
+
+```
+
+### Assessment lm with PCA
+
+#### Specifications and Tuning
+
+```{r}
+#| label: lm-pca
+
+pca_wf <- 
+  workflow() |>
+  add_model(lm_spec)|>
+  add_recipe(lm_pca_rec)
+
+lm_pca_res <- pca_wf |>
+  fit_resamples(ames_boots)
+
+lm_pca_res |>
+  collect_metrics(summarize = TRUE)
 
 ```
 
@@ -882,13 +971,14 @@ glmnet_spec <-
 
 glmnet_wf <-
   workflow() |>
-  add_recipe(allfeats_rec) |>
+  add_recipe(glmnet_base_rec) |>
   add_model(glmnet_spec)
 
 # penalty = lambda; mixture = alpha
 glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), 
                                mixture = c(0.05, 0.2, 0.4, 0.6, 0.8, 1))
 
+# Tune with Folds
 set.seed(1982)
 doParallel::registerDoParallel()
 
@@ -904,7 +994,7 @@ final_glmnet <- glmnet_wf |>
 final_glmnet
 
 save(final_glmnet, file = "./models/final_models/final_glmnet.Rdata")
-# final_glmnet <- load("./models/final_models/final_glmnet.Rdata")
+
 
 ```
 
@@ -926,9 +1016,36 @@ final_glmnet
 
 ```
 
-A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were the best parameters. What a pitty such a low penalty, almost a full linear model.
+A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were the best parameters.
 
 For curiosity, I fitted the 1000 bootstraps to the **elastic net model** (code above) obtaining a mean RMSE = 0.0652. Best so far...
+
+
+```{r}
+#| label: Elastic-Net_sub
+#| eval: false
+
+# Get best model and fit with whole training set
+fit_glm_elnet <- 
+  final_glmnet |>
+  fit(ames_train)
+
+# Predicting on the test set
+ames_test <- 
+  ames_all |>
+  # select(-SalePrice) |>
+  filter(dataset == "test")
+
+res_2_elasticnet <- 
+  predict(fit_glm_elnet, ames_test) |>
+  mutate(SalePrice_pred = inv_boxcox(.pred, boxcox_lambda))  # orignal values in USD
+
+# .csv for submission
+sub_2_elasticnet <- data.frame(Id = ames_test$Id, SalePrice = res_2_elasticnet$SalePrice_pred)
+write.csv(sub_2_elasticnet, "./data/submissions/sub_2_elasticnet.csv", quote = FALSE, row.names = FALSE)
+
+
+```
 
 ### Assessment with Random Forest
 
@@ -938,13 +1055,23 @@ For curiosity, I fitted the 1000 bootstraps to the **elastic net model** (code a
 #| label: Random_Forest-set-tune
 #| eval: false
 
+
+
+tree_rec <- 
+  recipe(SalePrice_bc ~ ., data = ames_train) |>
+  update_role(Id, new_role = "Id variabe") |>
+  update_role(SalePrice, new_role = "original outcome") |>
+  update_role(dataset, new_role = "splitting variable") |>
+  step_dummy(all_nominal_predictors()) 
+
+
 rf_spec <-
   rand_forest(mtry = tune(), trees = 1000, min_n = tune()) |>
   set_engine("ranger") |>
   set_mode("regression")
 
 rf_wf <- workflow() |>
-  add_recipe(allfeats_rec) |>
+  add_recipe(tree_rec) |>
   add_model(rf_spec)
 
 # Hyperparameters tuning ---
@@ -991,46 +1118,6 @@ final_rf
 ```
 
 For curiosity, I fitted the 1000 bootstraps to the **best rf candidate** (code above) obtaining a mean RMSE = 0.0772
-
-
-```{r}
-#| label: GoF
-
-# install.packages("doParallel")
-
-# doParallel::registerDoParallel()
-# set.seed(1982)
-
-# ames_results <- workflow_map(ames_wfset, "fit_resamples", resamples = ames_boots)
-
-# ames_results |>  
-#   collect_metrics(summarize = TRUE) |>
-#   filter(.metric == "rmse")
-
-
-# save(ames_results, file = "./models/ames_results_wf.Rdata")
-
-# ames_results <- load("./models/ames_results_wf.Rdata")
-
-```
-
-
-```{r}
-
-
-# ames_wf <- workflow() |>
-#   add_model(spec_lm) |>
-#   add_formula(SalePrice ~ GrLivArea)
-
-# # Fit models to bootstrapped sets
-
-# trained_models <- fit_resamples(object = ames_wf, resamples = ames_boots)
-
-# # See estimated performance
-# trained_models |>  collect_metrics(summarize = TRUE) # TRUE gets Avg. performance 
-
-```
-
 
 
 ## Arbitrary Full Width Content

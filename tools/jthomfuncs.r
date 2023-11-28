@@ -1,4 +1,4 @@
-# JT's functins:
+# JT's functions:
 
 jthomggtheme <- theme_minimal() +
   theme(
@@ -58,6 +58,31 @@ find_mode <- function(x) {
   tab <- tabulate(match(x, unique_values))
   unique_values[tab == max(tab)]
 }
+
+
+#' Calculation of the Mutual Information (MI) criterion 
+#' between Response and Predictors.
+#' 
+#' Requires the "infotheo" package!
+#'
+#' @author Jorge Thomas
+#' 
+#' @param data a data frame with Response (Target) and Predictors (features) columns.
+#' @param target a string with the column name of the Response.
+#' 
+#' @return an ordered and named list with the calculation of the Mutual Information Criterion
+calc_mi <- function(data, target) {
+  mi_list <- vector(mode = "list")
+
+  m_data <- infotheo::discretize(data.matrix(data))
+
+  for (col_name in colnames(m_data)){
+    mi_list[col_name] <- infotheo::mutinformation(m_data[, target], m_data[, col_name])
+  }
+  sort(unlist(mi_list, use.names = TRUE), decreasing = TRUE)
+}
+
+
 
 # get mode function
 # df_all |>
