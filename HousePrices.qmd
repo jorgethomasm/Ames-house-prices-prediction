@@ -247,14 +247,13 @@ Here's the code that complies with the four previous steps:
 ```{r}
 #| label: Feature Engineering
 
-
 # --- Total Aggregations ----
 ames_all <- ames_all |>
 
   # Continuous numerical ----
   # NEW TotalInteriorArea
   mutate(TotalIntArea = BsmtFinSF1 + BsmtFinSF2 + FirstFlrSF + SecondFlrSF) |>
-  select(-c(BsmtFinSF1, BsmtFinSF2, `FirstFlrSF`))|> # Bye bye...
+  select(-c(BsmtFinSF1, BsmtFinSF2))|> # Bye bye...
 
   # NEW HouseAge
   # mutate(HouseAge = YrSold - YearBuilt) |>  # Same as YearBuilt
@@ -332,23 +331,38 @@ ames_all <- ames_all |>
   mutate(ExistBsmt = fct_relevel(ExistBsmt, "No", "Yes"))|>
 
   # NEW Exist2ndFloor
-  mutate(Exist2ndFloor = if_else(`SecondFlrSF` == 0, "No", "Yes")) |>
-  select(-`SecondFlrSF`) |> # Bye, bye... 
+  mutate(Exist2ndFloor = if_else(`SecondFlrSF` == 0, "No", "Yes")) |>  
   mutate(Exist2ndFloor = fct_relevel(Exist2ndFloor, "No", "Yes")) |>
 
   # NEW ExistFireplace
   mutate(ExistFireplace = if_else(Fireplaces == 0, "No", "Yes")) |>
   mutate(ExistFireplace = fct_relevel(ExistFireplace, "No", "Yes")) |>
 
-  # NEW!!! Exist MasVnrArea: Masonry veneer area
+  # NEW ExistMasVeneer: Masonry veneer area
   mutate(ExistMasVeneer = if_else(MasVnrArea > 0, "Yes", "No")) |>
-  mutate(ExistMasVeneer = factor(ExistMasVeneer, levels = c("No", "Yes")))
+  mutate(ExistMasVeneer = factor(ExistMasVeneer, levels = c("No", "Yes"))) |>
+
+  # From Kaggle's Feature Engineering course ---- 
+
+  # New ratios
+  mutate(LivLotRatio = GrLivArea/LotArea) |>
+  mutate(Spaciousness = (FirstFlrSF + SecondFlrSF) / TotRmsAbvGrd) |>
+
+  # New interactions (by me!)
+  mutate(OverallQuCoInt = as.numeric(OverallQual) * as.numeric(OverallCond))
+
+
+ 
  
 
 # ---- Unordered factors ----
 
 # Nominative (unordered) categorical Feats
-cats_feats <- c("MSSubClass", "MSZoning", "Street", "Alley", "LandContour", "LotConfig", "Neighborhood", "Condition1", "Condition2", "BldgType", "HouseStyle", "RoofStyle", "RoofMatl", "Exterior1st", "Exterior2nd", "MasVnrType", "Foundation", "Heating", "CentralAir", "GarageType", "MiscFeature", "SaleType", "SaleCondition")
+cats_feats <- c("MSSubClass", "MSZoning", "Street", "Alley", "LandContour", "LotConfig", 
+                "Neighborhood", "Condition1", "Condition2", "BldgType", "HouseStyle", 
+                "RoofStyle", "RoofMatl", "Exterior1st", "Exterior2nd", "MasVnrType", 
+                "Foundation", "Heating", "CentralAir", "GarageType", "MiscFeature", 
+                "SaleType", "SaleCondition")
 
 ames_all <- ames_all |>
   #mutate(across(where(is.character), factor)) |>
@@ -372,11 +386,30 @@ ames_all <- ames_all |>
 
 # Low quality finished square feet (all floors)
 # Most of the values are 0 -> almost 0 variance. 
+
 ames_all$LowQualFinSF <- NULL
 ames_all$PoolArea <- NULL
 ```
 
 Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable, similar to what I did with the new `GarageNew` column.
+
+### Recheck mutual info
+
+```{r}
+#| label: recheck_mi
+
+# "calc_mi" is a function I wrote.
+
+mi_y_X_2 <- ames_all |>
+  filter(dataset == "train") |>
+  select(-c(Id, dataset)) |>
+  calc_mi_score(target = "SalePrice")
+
+mi_y_X_2 |> 
+  head(40) |>
+  knitr::kable(caption = "Mutual Info")
+
+```
 
 OK! Let's move on.
 
@@ -736,6 +769,20 @@ ames_all |>
 
 One of the motivations to develop this project is because I'm switching to the **Tidymodels** framework. Therefore, it's time to load the library to train a simple reference model.
 
+## Drop no info columns
+
+```{r}
+#| label: noinfo_drop
+#| code-fold: false
+
+noinfo_cols <- names(which(mi_y_X_2 < 0.06444))
+
+ames_all <-
+  ames_all |>
+  select(-all_of(noinfo_cols)) 
+```
+
+
 ## Resampling Technique for Test Error Estimation
 
 This is a critical step for final model selection. Depending on the chosen resample technique to estimate the Goodness-of-Prediction or test error, in this case metrics like RMSE can be slightly optimistic or conservative. Take a look at the pristine explanation by [@resamplingML].
@@ -814,6 +861,7 @@ Given the sensitivity to tails and outliers of linear models, remember @fig-cont
 
 ```{r}
 #| label: cherry-picking_lm
+#| eval: false
 
 # ---------- Preprocessing Pipelines ----------
 
@@ -888,6 +936,7 @@ In order to see the feature importance, I'll train and extract the workflow of t
 ```{r}
 #| label: lm_best_feats
 #| column: margin
+#| eval: false
 
 ames_lms_res |>
   extract_workflow("recipe_2_linear_reg") |>
@@ -954,21 +1003,14 @@ glmnet_base_rec <-
 
 # glmnet_base_rec |> prep() |> bake(new_data = NULL) 
 
-lm_pca_rec <- 
-  glmnet_base_rec |>
-  # step_pca(all_numeric_predictors(), num_comp = tune()) |>
-  step_pca(all_numeric_predictors(), threshold = 0.90) |>
-  step_normalize(all_numeric_predictors())
+# lm_pca_rec <- 
+#   glmnet_base_rec |>
+#   # step_pca(all_numeric_predictors(), num_comp = tune()) |>
+#   step_pca(all_numeric_predictors(), threshold = 0.90) |>
+#   step_normalize(all_numeric_predictors())
 
 # lm_pca_rec |> prep(verbose = TRUE) |> bake(new_data = NULL) 
 
-
-
-
-
-# shrinkage_spline_rec <-
-#   shrinkage_rec |>
-#   step_bs(all_numeric_predictors())  
 
 ```
 
@@ -978,6 +1020,7 @@ lm_pca_rec <-
 
 ```{r}
 #| label: lm-pca
+#| eval: false
 
 pca_wf <- 
   workflow() |>
@@ -998,9 +1041,8 @@ lm_pca_res |>
 
 ```{r}
 #| label: Elastic_net-set-tune
-#| eval: false	
 
-library(usemodels)  # CheatSheets
+# library(usemodels)  # CheatSheets
 
 # Model: Elastic Net -------------
 glmnet_spec <-
@@ -1033,7 +1075,7 @@ final_glmnet <- glmnet_wf |>
 
 final_glmnet
 
-save(final_glmnet, file = "./models/final_models/final_glmnet.Rdata")
+# save(final_glmnet, file = "./models/final_models/final_glmnet.Rdata")
 
 ```
 
@@ -1043,12 +1085,12 @@ Load Elastic-Net workflow with best parameters:
 #| label: final_glmnet
 #| code-fold: false
 
-final_glmnet <- load("./models/final_models/final_glmnet.Rdata")
-final_glmnet
+# final_glmnet <- load("./models/final_models/final_glmnet.Rdata")
+# final_glmnet
 
-# glmnet_boot_fit <- 
-#   final_glmnet |> 
-#   fit_resamples(resamples = ames_boots)
+glmnet_boot_fit <- 
+  final_glmnet |> 
+  fit_resamples(resamples = ames_boots)
   
 # glmnet_boot_fit |>
 #   collect_metrics(summarize = TRUE)
@@ -1058,6 +1100,8 @@ final_glmnet
 A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were the best parameters.
 
 For curiosity, I fitted the 1000 bootstraps to the **elastic net model** (code above) obtaining a mean RMSE = 0.0652. Best so far...
+
+New fit with new feature engineering, mean RMSE = 0.0641. **Kaggle's Top 15%**.
 
 ```{r}
 #| label: Elastic-Net_submission
@@ -1074,13 +1118,13 @@ ames_test <-
   # select(-SalePrice) |>
   filter(dataset == "test")
 
-res_2_elasticnet <- 
+res_3_elasticnet <- 
   predict(fit_glm_elnet, ames_test) |>
   mutate(SalePrice_pred = inv_boxcox(.pred, boxcox_lambda))  # orignal values in USD
 
 # .csv for submission
-sub_2_elasticnet <- data.frame(Id = ames_test$Id, SalePrice = res_2_elasticnet$SalePrice_pred)
-write.csv(sub_2_elasticnet, "./data/submissions/sub_2_elasticnet.csv", quote = FALSE, row.names = FALSE)
+sub_3_elasticnet <- data.frame(Id = ames_test$Id, SalePrice = res_3_elasticnet$SalePrice_pred)
+write.csv(sub_3_elasticnet, "./data/submissions/jthom_sub_3_elasticnet.csv", quote = FALSE, row.names = FALSE)
 
 
 ```
