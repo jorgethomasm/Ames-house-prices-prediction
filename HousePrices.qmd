@@ -239,8 +239,7 @@ After 1.5 hours of reading, googling, understanding other notebooks and delibera
 
 4.  Creation of new **binary** features that state if a determined installation exists or doesn't.
 
-[After my second Kaggle submission (Top 25%) I completed the [Feature Engineering course](https://www.kaggle.com/learn/feature-engineering) that has a lot of tips for this projects.
-I included some new features and tricks from there]{.column-margin}
+[After my second Kaggle submission (Top 25%) I completed the [Feature Engineering course](https://www.kaggle.com/learn/feature-engineering) that has a lot of tips! I included some new features and tricks from there]{.column-margin}
 
 Here's the code that complies with the four previous steps:
 
@@ -350,9 +349,6 @@ ames_all <- ames_all |>
 
   # New interactions (by me!)
   mutate(OverallQuCoInt = as.numeric(OverallQual) * as.numeric(OverallCond))
-
-
- 
  
 
 # ---- Unordered factors ----
@@ -818,6 +814,9 @@ ames_train <-
 set.seed(1982)
 ames_folds <- vfold_cv(ames_train, v = 10, repeats = 10, strata = SalePrice_bc) # v = 10 folds are default
 
+set.seed(1982)
+ames_folds_xgb <- vfold_cv(ames_train, v = 10, repeats = 1, strata = SalePrice_bc) 
+
 # ---- The Bootstrap ----
 set.seed(1982)
 ames_boots <- bootstraps(ames_train, times = 1000, strata = SalePrice_bc)
@@ -845,18 +844,11 @@ Given the sensitivity to tails and outliers of linear models, remember @fig-cont
 
 [Note that `SalePrice_bc` is the transformed outcome. Click [here](https://www.tmwr.org/recipes.html#skip-equals-true) for more info.]{.column-margin}
 
-```{r}
-#| label: cherry-picking_lm
-#| eval: false
-
-```
-
 OK! We can see the power of adding good predictors in the test RMSE estimation
 
 My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0812. The result was transformed in the pipeline, therefore no units are displayed.
 
 [I got slightly better results using dummy encoded factors. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-cherry_picking_feats.]{.column-margin}
-
 
 ## Elastic-Net Regression
 
@@ -864,8 +856,10 @@ Having high multicollinearty it's reasonable to think of some sort of penalisati
 
 I'll choose Elastic Net regression, combining the best of Lasso and Ridge. I must remember to myself that *predictors* must be scaled! I don't want to over-penalised non-scaled variables using shrinkage methods.
 
+### Elastic-Net Spec & Tuning
+
 ```{r}
-#| label: Preprocessing
+#| label: Elastic-net-setup
 
 # Elastic Net
 glmnet_base_rec <-
@@ -875,17 +869,10 @@ glmnet_base_rec <-
   update_role(dataset, new_role = "splitting variable") |>
   step_dummy(all_nominal_predictors()) |>    
   step_YeoJohnson(all_numeric_predictors()) |>
-  step_normalize(all_numeric_predictors()) |>
-  step_zv(all_predictors())
-
+  step_zv(all_predictors()) |> 
+  step_normalize(all_numeric_predictors())
+  
 # glmnet_base_rec |> prep() |> bake(new_data = NULL) 
-
-```
-
-### Elastic-Net Spec & Tuning
-
-```{r}
-#| label: Elastic_net-set-tune
 
 # library(usemodels)  # CheatSheets
 
@@ -902,8 +889,12 @@ glmnet_wf <-
   add_model(glmnet_spec)
 
 # penalty = lambda; mixture = alpha
-glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), 
-                               mixture = c(0.05, 0.2, 0.4, 0.6, 0.8, 1))
+
+# mixture_ = c(0.05, 0.2, 0.4, 0.6, 0.8, 1)
+mixture_ = c(0.5, 0.55, 0.6, 0.65, 0.7)
+
+glmnet_grid <- tidyr::crossing(penalty = 10^seq(-4, -1, length.out = 20), 
+                               mixture = mixture_)
 
 # Tune with Folds
 set.seed(1982)
@@ -922,7 +913,7 @@ final_glmnet <- glmnet_wf |>
 
 final_glmnet
 
-# save(final_glmnet, file = "./models/final_models/final_glmnet.Rdata")
+# write_rds(final_glmnet, file = "./models/final_models/final_glmnet.rds")
 
 ```
 
@@ -932,21 +923,21 @@ final_glmnet
 #| label: final_glmnet
 #| code-fold: false
 
-# final_glmnet <- load("./models/final_models/final_glmnet.Rdata")
+# read_rds(file = "./models/final_models/final_glmnet.Rdata")
 # final_glmnet
 
 glmnet_boot_fit <- 
   final_glmnet |> 
   fit_resamples(resamples = ames_boots)
   
-# glmnet_boot_fit |>
-#   collect_metrics(summarize = TRUE)
+glmnet_boot_fit |>
+  collect_metrics(summarize = TRUE)
 
 ```
 
 A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were the best parameters.
 
-New fit with new feature engineering, mean RMSE = 0.0641 (1000 Bootstraps). **Kaggle's Top 15%**. Best so far...
+#### Elastic-Net Submission
 
 ```{r}
 #| label: Elastic-Net_submission
@@ -963,23 +954,110 @@ ames_test <-
   # select(-SalePrice) |>
   filter(dataset == "test")
 
-res_3_elasticnet <- 
+res_elasticnet <- 
   predict(fit_glm_elnet, ames_test) |>
   mutate(SalePrice_pred = inv_boxcox(.pred, boxcox_lambda))  # orignal values in USD
 
 # .csv for submission
-sub_3_elasticnet <- data.frame(Id = ames_test$Id, SalePrice = res_3_elasticnet$SalePrice_pred)
-write.csv(sub_3_elasticnet, "./data/submissions/jthom_sub_3_elasticnet.csv", quote = FALSE, row.names = FALSE)
+sub_elasticnet <- data.frame(Id = ames_test$Id, SalePrice = res_elasticnet$SalePrice_pred)
+write.csv(sub_elasticnet, "./data/submissions/jthom_sub_3_elasticnet.csv", quote = FALSE, row.names = FALSE)
 
 ```
 
+New fit with new feature engineering, mean RMSE = 0.0640 (1000 Bootstraps). **Kaggle's Top 15%**. Best so far...
+
 ### XGBoost Regression
+
+Because of the multicollinearity, xgboost is one of the best candidates for this project.
 
 #### XGBoost Spec & Tuning
 
 ```{r}
 #| label: XGB-set-tune
 #| eval: false
+
+library(xgboost)
+
+# library(usemodels)
+# usemodels::use_xgboost(SalePrice_bc ~ ., data = ames_train)
+
+xgboost_rec <-
+  recipe(formula = SalePrice_bc ~ ., data = ames_train) |>
+  update_role(Id, new_role = "Id variable") |>
+  update_role(SalePrice, new_role = "original outcome") |>
+  update_role(dataset, new_role = "splitting variable") |>
+  step_dummy(all_nominal_predictors()) |>    
+  step_YeoJohnson(all_numeric_predictors()) |>
+  step_zv(all_predictors()) |> 
+  step_normalize(all_numeric_predictors())  
+
+xgboost_spec <-
+  boost_tree(trees = 1000, 
+             min_n = tune(), 
+             tree_depth = tune(), 
+             learn_rate = tune(),
+             loss_reduction = tune(), 
+             sample_size = tune()) |>
+  set_mode("regression") |>
+  set_engine("xgboost", validation = 0.2) # 20% from train split of each resample
+
+xgboost_wf <-
+  workflow() |>
+  add_recipe(xgboost_rec) |>
+  add_model(xgboost_spec)
+
+set.seed(1982)
+doParallel::registerDoParallel()
+
+xgboost_tune <-
+  tune_grid(xgboost_wf, 
+            resamples = ames_folds, 
+            grid = 20)
+
+# Explore Results 
+show_best(xgboost_tune, metric = "rmse")
+
+# Main Arguments:
+#   trees = 1000
+#   min_n = 6
+#   tree_depth = 3
+#   learn_rate = 0.016264141166364
+#   loss_reduction = 2.85800562773311e-08
+#   sample_size = 0.673825541965198
+
+# Set best parameters
+final_xgboost <- xgboost_wf |>
+  finalize_workflow(select_best(xgboost_tune, metric = "rmse"))
+
+final_xgboost
+
+write_rds(final_xgboost, file = "./models/final_models/final_xgboost.rds")
+
+```
+
+#### XGBoost Submission
+
+```{r}
+#| label: XGB_submission
+#| eval: false
+
+# Get best model and fit with whole training set
+fit_xgboost <- 
+  final_xgboost |>
+  fit(ames_train)
+
+# Predicting on the test set
+ames_test <- 
+  ames_all |>  
+  filter(dataset == "test")
+
+res_xgboost <- 
+  predict(fit_xgboost, ames_test) |>
+  mutate(SalePrice_pred = inv_boxcox(.pred, boxcox_lambda))  # orignal values in USD
+
+# .csv for submission
+sub_xgboost <- data.frame(Id = ames_test$Id, SalePrice = res_xgboost$SalePrice_pred)
+write.csv(sub_xgboost, "./data/submissions/jthom_sub_4_xgboost.csv", quote = FALSE, row.names = FALSE)
 
 ```
 
