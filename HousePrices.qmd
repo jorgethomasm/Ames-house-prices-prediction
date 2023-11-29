@@ -824,26 +824,12 @@ ames_boots <- bootstraps(ames_train, times = 1000, strata = SalePrice_bc)
 ames_boots  
 ```
 
-## Base Worflows Set
-
-My final objective is to stack (combine / ensemble) several models of different nature. However, for a first model I'd like to keep interpretability.
-
-### Linear Models
-
-**Where to start?** In order to have a set of reference models, I will proceed as follows:
-
--   Cherry-picking predictors with linear influence from correlograms @fig-num-corr and @fig-cat-corr.
--   Establish a ***workflow set*** of linear models:
-    -   Fit the simplest OLS univariate lm `GrLivArea` vs. `SalePrice`.
-    -   Cherry-pick predictors and fit a linear hyper-plane: multivariate lm.
-    -   Add some flexibility on top fitting a Spline GAM.
-
 For the sake of RMSE metric comparison I will always scale numeric predictors and use the Box-Cox transformed response `SalePrice_bc`, this given the improvement shown in @fig-Y-trans.
 
 The following code shows preprocessing steps enclosed in a pipeline or ***recipe***. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
 
 ```{r}
-#| label: fig-cherry_picking_feats
+#| label: skewed_feats
 #| fig-cap: "Correlated numerical predictors are skewed and contain zero values."
 
 ames_train |>  
@@ -863,66 +849,6 @@ Given the sensitivity to tails and outliers of linear models, remember @fig-cont
 #| label: cherry-picking_lm
 #| eval: false
 
-# ---------- Preprocessing Pipelines ----------
-
-# Uni-lm (SIMPLEST reasonable model)
-simplest_rec <-
-  recipe(SalePrice_bc ~ GrLivArea, data = ames_train) |>  
-  step_YeoJohnson(GrLivArea) |>
-  step_normalize(all_numeric_predictors())
-
-# simplest_rec |> prep() |>  bake(new_data = NULL) # Sanity check for warnings
-
-# Multi-lm 
-multi_lm_rec <-
-  recipe(SalePrice_bc ~ GrLivArea + TotBaths + GarageArea + TotalBsmtSF + YearBuilt + OverallQual + KitchenQual + Foundation + ExistFireplace + HeatingQC, data = ames_train) |>  
-  step_YeoJohnson(all_numeric_predictors()) |>
-  step_normalize(all_numeric_predictors()) |>
-  step_dummy(all_nominal_predictors())
-
-# multi_lm_rec |> prep() |> bake(new_data = NULL) # Sanity check for warnings
-
-# GAM: Splines 
-multi_gam_rec <-
-  multi_lm_rec |>
-  step_bs(all_numeric_predictors())  # GAM basis fun expansion.
-
-
-# ---------- Model specification ----------
-lm_spec <- 
-  linear_reg() |>
-  set_mode("regression") |>
-  set_engine("lm")
-
-
-# ---------- Set of Workflows ----------  
-my_lm_recipes <- list(simplest_rec, multi_lm_rec, multi_gam_rec)
-my_lms_specs <- list(lm_spec)
-
-# Combine a list of pre-processors with a list of models:
-ames_wfset <- workflow_set(my_lm_recipes, my_lms_specs, 
-                           cross = TRUE, 
-                           case_weights = NULL)
-ames_wfset
-
-
-# ---------- Fit Bootstraps ----------
-doParallel::registerDoParallel()
-set.seed(1982)
-
-ames_lms_res <- workflow_map(ames_wfset, "fit_resamples", resamples = ames_boots)
-
-save(ames_lms_res, file = "./models/trained_resamples/ames_lms_res.Rdata")
-
-# Load fitted Bootstraps
-
-# ames_lms_res <- load(file = "./models/trained_resamples/ames_lms_res.Rdata")
-
-ames_lms_res |>  
-  collect_metrics(summarize = TRUE) |>
-  select(-c(.estimator, .config)) |>
-  filter(.metric == "rmse") |>
-  knitr::kable(caption = "Three Base Linear Models")
 ```
 
 OK! We can see the power of adding good predictors in the test RMSE estimation
@@ -931,57 +857,8 @@ My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0812. T
 
 [I got slightly better results using dummy encoded factors. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-cherry_picking_feats.]{.column-margin}
 
-In order to see the feature importance, I'll train and extract the workflow of the simple, second model, i.e., the multivariate lm:
 
-```{r}
-#| label: lm_best_feats
-#| column: margin
-#| eval: false
-
-ames_lms_res |>
-  extract_workflow("recipe_2_linear_reg") |>
-  fit(ames_train) |>  
-  tidy() |> 
-  select(-statistic) |>
-  arrange(-abs(estimate)) |>
-  slice_head(n = 15) |> 
-  knitr::kable(caption = 'Multi-lm')  
-```
-
-Here is the code to extract the best model workflow, retrain with the whole training set, predicting and writing the submission .csv file:
-
-```{r}
-#| label: first_submission
-#| warning: false
-#| eval: false
-
-# Get best model and fit with whole training set
-fit_lm_bsplines <- 
-  extract_workflow(ames_lms_res, "recipe_3_linear_reg") |>
-  fit(ames_train)
-
-# Predicting on the test set
-ames_test <- 
-  ames_all |>
-  select(-SalePrice) |>
-  filter(dataset == "test")
-
-res_1_bsplines <- 
-  predict(fit_lm_bsplines, ames_test) |>
-  mutate(SalePrice_pred = inv_boxcox(.pred, boxcox_lambda))  # orignal values in USD
-
-# .csv for submission
-sub_1 <- data.frame(Id = ames_test$Id, SalePrice = res_1_bsplines$SalePrice_pred)
-# write.csv(sub_1, "./data/submissions/sub_1_splines.csv", quote = FALSE, row.names = FALSE)
-```
-
-#### First Kaggle Submission and Result
-
-Ok! I got on the **top 59% (2825/4819)** cherry picking predictors and a GAM of splines. Not great, as expected, but it's an important reference.
-
-Now that I have some reference, I'll proceed with more complexity and involving all predictors in order to extract more signal.
-
-## Advanced Workflows
+## Elastic-Net Regression
 
 Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
 
@@ -1003,41 +880,9 @@ glmnet_base_rec <-
 
 # glmnet_base_rec |> prep() |> bake(new_data = NULL) 
 
-# lm_pca_rec <- 
-#   glmnet_base_rec |>
-#   # step_pca(all_numeric_predictors(), num_comp = tune()) |>
-#   step_pca(all_numeric_predictors(), threshold = 0.90) |>
-#   step_normalize(all_numeric_predictors())
-
-# lm_pca_rec |> prep(verbose = TRUE) |> bake(new_data = NULL) 
-
-
 ```
 
-### Assessment lm with PCA
-
-#### Specifications and Tuning
-
-```{r}
-#| label: lm-pca
-#| eval: false
-
-pca_wf <- 
-  workflow() |>
-  add_model(lm_spec)|>
-  add_recipe(lm_pca_rec)
-
-lm_pca_res <- pca_wf |>
-  fit_resamples(ames_boots)
-
-lm_pca_res |>
-  collect_metrics(summarize = TRUE)
-
-```
-
-### Assessment with Elastic-Net
-
-#### Specifications and Tuning
+### Elastic-Net Spec & Tuning
 
 ```{r}
 #| label: Elastic_net-set-tune
@@ -1064,7 +909,9 @@ glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20),
 set.seed(1982)
 doParallel::registerDoParallel()
 
-glmnet_tune <- tune_grid(glmnet_wf, resamples = ames_folds, grid = glmnet_grid)
+glmnet_tune <- tune_grid(glmnet_wf, 
+                         resamples = ames_folds,  # CV is faster!
+                         grid = glmnet_grid)
 
 # Explore Results 
 show_best(glmnet_tune, metric = "rmse")
@@ -1079,7 +926,7 @@ final_glmnet
 
 ```
 
-Load Elastic-Net workflow with best parameters:
+### Elastic-Net Test Error Assessment
 
 ```{r}
 #| label: final_glmnet
@@ -1099,9 +946,7 @@ glmnet_boot_fit <-
 
 A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were the best parameters.
 
-For curiosity, I fitted the 1000 bootstraps to the **elastic net model** (code above) obtaining a mean RMSE = 0.0652. Best so far...
-
-New fit with new feature engineering, mean RMSE = 0.0641. **Kaggle's Top 15%**.
+New fit with new feature engineering, mean RMSE = 0.0641 (1000 Bootstraps). **Kaggle's Top 15%**. Best so far...
 
 ```{r}
 #| label: Elastic-Net_submission
@@ -1126,93 +971,18 @@ res_3_elasticnet <-
 sub_3_elasticnet <- data.frame(Id = ames_test$Id, SalePrice = res_3_elasticnet$SalePrice_pred)
 write.csv(sub_3_elasticnet, "./data/submissions/jthom_sub_3_elasticnet.csv", quote = FALSE, row.names = FALSE)
 
-
 ```
 
-### Assessment with Random Forest
+### XGBoost Regression
 
-#### Specifications and Tuning
+#### XGBoost Spec & Tuning
 
 ```{r}
-#| label: Random_Forest-set-tune
+#| label: XGB-set-tune
 #| eval: false
 
-
-
-tree_rec <- 
-  recipe(SalePrice_bc ~ ., data = ames_train) |>
-  update_role(Id, new_role = "Id variabe") |>
-  update_role(SalePrice, new_role = "original outcome") |>
-  update_role(dataset, new_role = "splitting variable") |>
-  step_dummy(all_nominal_predictors()) 
-
-
-rf_spec <-
-  rand_forest(mtry = tune(), trees = 1000, min_n = tune()) |>
-  set_engine("ranger") |>
-  set_mode("regression")
-
-rf_wf <- workflow() |>
-  add_recipe(tree_rec) |>
-  add_model(rf_spec)
-
-# Hyperparameters tuning ---
-set.seed(1982)
-doParallel::registerDoParallel()
-
-rf_tune <- tune_grid(rf_wf,                     
-                    resamples = ames_folds, 
-                    grid = 10)
-
-# Explore Results
-show_best(rf_tune, metric = "rmse")
-
-#  26 minutes Aprox. ---
-
-# Set best parameters
-final_rf <- rf_wf |>
-  finalize_workflow(select_best(rf_tune, metric = "rmse"))
-
-final_rf
-
-save(final_rf, file = "./models/final_models/final_rf.Rdata")
-# final_rf <- load("./models/final_models/final_rf.Rdata")
 ```
 
-Load Random Forest workflow with best parameters:
+## Models Stacking
 
-```{r}
-#| label: final_rf
-#| code-fold: false
-
-final_rf <- load("./models/final_models/final_rf.Rdata")
-final_rf
-
-# Test error estimation using the bootstraps
-
-# doParallel::registerDoParallel()
-# set.seed(1982)
-
-# final_rf |> 
-#   fit_resamples(resamples = ames_boots) |>
-#   collect_metrics(summarize = TRUE)
-
-```
-
-For curiosity, I fitted the 1000 bootstraps to the **best rf candidate** (code above) obtaining a mean RMSE = 0.0772
-
-## Arbitrary Full Width Content
-
-::: column-page-right
-*R is free software and comes with ABSOLUTELY NO WARRANTY.* You are welcome to redistribute it under the terms of the GNU General Public License versions 2 or 3. For more information about these matters see <https://www.gnu.org/licenses/>.
-:::
-
-::: {.callout-note appearance="simple"}
-This feature depends upon `link-citations` to locate and place references in the margin. This is enabled by default, but if you disable `link-citations` then references in the HTML output will be placed at the end of the output document as they normally are.
-:::
-
-::: callout-tip
-## Using R within Chunk Options
-
-If you wish to use raw R expressions as part of the chunk options (like above), then you need to define those in the `tag=value` format within the curly brackets `{r label, tag=value}` instead of the `tag: value` YAML syntax on a new line starting with the hashpipe `#|`. The former approach is documented on [knitr's website](https://yihui.org/knitr/options/) while the latter is explained in [Quarto's documentation](https://quarto.org/docs/reference/cells/cells-knitr.html).
-:::
+To be continue...
