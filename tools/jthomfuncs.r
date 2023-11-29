@@ -78,7 +78,9 @@ calc_mi_score <- function(data, target) {
                                  nbins = numbins)
 
   for (col_name in colnames(m_data)){
+
     mi_list[col_name] <- infotheo::mutinformation(m_data[, target], m_data[, col_name])
+
   }
 
   sort(unlist(mi_list, use.names = TRUE), decreasing = TRUE)

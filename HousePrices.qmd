@@ -145,7 +145,7 @@ ames_all <- ames_all |>
   mutate(LotFrontage = NULL) |> # Removing LotFrontage
   mutate(GarageNew = if_else(YearBuilt - GarageYrBlt > 0, "Yes", "No")) |> # New Feat.
   replace_na(list(GarageNew = "None")) |>
-  mutate(GarageNew = factor(GarageNew, levels = c("None", "No", "Yes"))) |> # 3 levels
+  mutate(GarageNew = factor(GarageNew, levels = c("None", "No", "Yes"), ordered = TRUE)) |> # 3 levels
   mutate(GarageYrBlt = NULL) |> # Removing old Feat.
   mutate_if(is.numeric, replace_na_with_median)
 ```
@@ -239,12 +239,12 @@ After 1.5 hours of reading, googling, understanding other notebooks and delibera
 
 4.  Creation of new **binary** features that state if a determined installation exists or doesn't.
 
-[After my second Kaggle submission (Top 25%) I completed the [Feature Engineering course](https://www.kaggle.com/learn/feature-engineering) that has a lot of tips! I included some new features and tricks from there]{.column-margin}
+[After my second Kaggle submission (Top 25%) I completed the [Feature Engineering course](https://www.kaggle.com/learn/feature-engineering) that has a lot of tips! I included some new features and tricks from there.]{.column-margin}
 
 Here's the code that complies with the four previous steps:
 
 ```{r}
-#| label: Feature Engineering
+#| label: Feat_Eng
 
 # --- Total Aggregations ----
 ames_all <- ames_all |>
@@ -259,7 +259,7 @@ ames_all <- ames_all |>
 
   # NEW TotalExteriorArea
   mutate(TotalExtArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + threessnporch + ScreenPorch) |>
-  select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, `threessnporch`, ScreenPorch)) |> # Bye bye...
+  select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, threessnporch, ScreenPorch)) |> # Bye bye...
 
   # Counting numerical ----
   # NEW TotalBaths
@@ -274,33 +274,33 @@ ames_all <- ames_all |>
 
 ames_all <- ames_all |>
   # 10 Levels:
-  mutate(OverallQual = factor(OverallQual)) |>
-  mutate(OverallCond = factor(OverallCond)) |> 
+  mutate(OverallQual = factor(OverallQual, seq(1, 10), ordered = TRUE)) |>
+  mutate(OverallCond = factor(OverallCond, seq(1, 10), ordered = TRUE)) |> 
 
   # 5 Levels + None
-  mutate(ExterQual = factor(ExterQual, c("Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(ExterCond = factor(ExterCond, c("Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(BsmtQual = factor(BsmtQual, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(BsmtCond = factor(BsmtCond, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(HeatingQC = factor(HeatingQC, c("Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(KitchenQual = factor(KitchenQual, c("Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(FireplaceQu = factor(FireplaceQu, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(GarageQual = factor(GarageQual, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(GarageCond = factor(GarageCond, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
-  mutate(PoolQC = factor(PoolQC, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(ExterQual = factor(ExterQual, c("Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(ExterCond = factor(ExterCond, c("Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(BsmtQual = factor(BsmtQual, c("None", "Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(BsmtCond = factor(BsmtCond, c("None", "Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(HeatingQC = factor(HeatingQC, c("Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(KitchenQual = factor(KitchenQual, c("Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(FireplaceQu = factor(FireplaceQu, c("None", "Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(GarageQual = factor(GarageQual, c("None", "Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(GarageCond = factor(GarageCond, c("None", "Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
+  mutate(PoolQC = factor(PoolQC, c("None", "Po", "Fa", "TA", "Gd", "Ex"), ordered = TRUE)) |>
 
   #  Others:
-  mutate(LotShape = factor(LotShape, c("Reg", "IR1", "IR2", "IR3"))) |>
-  mutate(LandSlope = factor(LandSlope, c("Sev", "Mod", "Gtl"))) |>
-  mutate(BsmtExposure = factor(BsmtExposure, c("None", "No", "Mn", "Av", "Gd"))) |>
-  mutate(BsmtFinType1 = factor(BsmtFinType1, c("None", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"))) |>
-  mutate(BsmtFinType2 = factor(BsmtFinType2, c("None", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"))) |>
-  mutate(Functional = factor(Functional, c("Sal", "Sev", "Maj1", "Maj2", "Mod", "Min2", "Min1", "Typ"))) |>
-  mutate(GarageFinish = factor(GarageFinish, c("None", "Unf", "RFn", "Fin"))) |>
-  mutate(PavedDrive = factor(PavedDrive, c("N", "P", "Y"))) |>
-  mutate(Utilities = factor(Utilities, c("NoSeWa", "NoSewr", "AllPub"))) |>  
-  mutate(Electrical = factor(Electrical, c("Mix", "FuseP", "FuseF", "FuseA", "SBrkr"))) |>
-  mutate(Fence = factor(Fence, c("None", "MnWw", "GdWo", "MnPrv", "GdPrv")))
+  mutate(LotShape = factor(LotShape, c("Reg", "IR1", "IR2", "IR3"), ordered = TRUE)) |>
+  mutate(LandSlope = factor(LandSlope, c("Sev", "Mod", "Gtl"), ordered = TRUE)) |>
+  mutate(BsmtExposure = factor(BsmtExposure, c("None", "No", "Mn", "Av", "Gd"), ordered = TRUE)) |>
+  mutate(BsmtFinType1 = factor(BsmtFinType1, c("None", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"), ordered = TRUE)) |>
+  mutate(BsmtFinType2 = factor(BsmtFinType2, c("None", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"), ordered = TRUE)) |>
+  mutate(Functional = factor(Functional, c("Sal", "Sev", "Maj1", "Maj2", "Mod", "Min2", "Min1", "Typ"), ordered = TRUE)) |>
+  mutate(GarageFinish = factor(GarageFinish, c("None", "Unf", "RFn", "Fin"), ordered = TRUE)) |>
+  mutate(PavedDrive = factor(PavedDrive, c("N", "P", "Y"), ordered = TRUE)) |>
+  mutate(Utilities = factor(Utilities, c("NoSeWa", "NoSewr", "AllPub"), ordered = TRUE)) |>  
+  mutate(Electrical = factor(Electrical, c("Mix", "FuseP", "FuseF", "FuseA", "SBrkr"), ordered = TRUE)) |>
+  mutate(Fence = factor(Fence, c("None", "MnWw", "GdWo", "MnPrv", "GdPrv"), ordered = TRUE))
 
 
 # ---- New Binary Features ----
@@ -362,9 +362,8 @@ cats_feats <- c("MSSubClass", "MSZoning", "Street", "Alley", "LandContour", "Lot
 
 ames_all <- ames_all |>
   #mutate(across(where(is.character), factor)) |>
-  mutate(across(all_of(cats_feats), factor))
+  mutate(across(all_of(cats_feats), ~ factor(.x, ordered = FALSE)))
   
-
 
 # ---- Numerical Features ----
 
@@ -389,12 +388,14 @@ ames_all$PoolArea <- NULL
 
 Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable, similar to what I did with the new `GarageNew` column.
 
+`MSSubClass` has too many categories, therefore I will perform **target enconding** in the *recipe* as a step.
+
 ### Recheck mutual info
 
 ```{r}
 #| label: recheck_mi
 
-# "calc_mi" is a function I wrote.
+# "calc_mi_score" is a function I wrote.
 
 mi_y_X_2 <- ames_all |>
   filter(dataset == "train") |>
@@ -402,12 +403,9 @@ mi_y_X_2 <- ames_all |>
   calc_mi_score(target = "SalePrice")
 
 mi_y_X_2 |> 
-  head(40) |>
+  head(30) |>
   knitr::kable(caption = "Mutual Info")
-
 ```
-
-OK! Let's move on.
 
 ### Searching for simple correlations
 
@@ -567,7 +565,7 @@ ames_all |>
 ```{r}
 #| label: fig-count_overallQual
 #| cap-location: margin
-#| fig-cap: 'Houses with mid-quality levels are most frequent in the train dataset. I will reduce the categories to nine (9), grouping or lumping 1 and 2 as "Other".'
+#| fig-cap: "Houses with mid-quality levels are most frequent in the train dataset."
 #| column: margin
 #| code-fold: false
 
@@ -576,23 +574,12 @@ ames_all |>
   count(OverallQual, name = "count") |>
   ggplot(aes(y = fct_reorder(OverallQual, count), x = count)) + 
   geom_col(aes(fill = OverallQual)) +
-  geom_text(aes(label = count), size = 10) +
+  geom_text(aes(label = count), size = 8) +
   labs(y = "Overall Quality") + 
   theme(legend.position = "none", axis.title.y = element_text(angle = 90))
 ```
 
 It seems that most popular houses, with an overall quality of 5 (mid-quality level), are the ones between 120K and 145K USD. Of course, this was back in the years of 2006 - 2010.
-
-Now I'll group or lump into one category `OverallQual = 1` and `OverallQual = 2`.
-
-```{r}
-#| label: lumping
-
-ames_all <- 
-  ames_all |>
-  mutate(OverallQual = fct_lump(OverallQual, n = 8)) |>
-  mutate(OverallQual = fct_relevel(OverallQual, "Other"))  
-```
 
 #### How sale prices vary with the living area and depending on house styles?
 
@@ -625,10 +612,11 @@ ames_all |>
 One can hear often that **location is everything**. Let's see it here:
 
 ```{r}
-
 #| label: fig-houseLocations
-#| fig-column: page-right
+#| fig-width: 7
+#| fig-height: 10
 #| fig-cap: "There's a lot of variation depending on location, as expected. Northridge (NoRidge), College Creek (CollgCr) and Northridge Heights (NridgHt) seem to be the most expensive neighbourhoods."
+#| warning: false
 
 ames_all |>
   filter(dataset == "train") |>
@@ -643,8 +631,8 @@ ames_all |>
               se = FALSE,
               size = 0.7, 
               alpha = 0.5) +
-  facet_wrap(~Neighborhood, nrow = 3) +
-  theme(legend.position = "bottom")
+  facet_wrap(~Neighborhood, nrow = 4) +
+  theme(legend.position = "none")
 ```
 
 ### Analysis of response SalePrice
@@ -779,7 +767,7 @@ ames_all <-
 ```
 
 
-## Resampling Technique for Test Error Estimation
+## Resampling for Test Error Estimation
 
 This is a critical step for final model selection. Depending on the chosen resample technique to estimate the Goodness-of-Prediction or test error, in this case metrics like RMSE can be slightly optimistic or conservative. Take a look at the pristine explanation by [@resamplingML].
 
@@ -828,7 +816,7 @@ For the sake of RMSE metric comparison I will always scale numeric predictors an
 The following code shows preprocessing steps enclosed in a pipeline or ***recipe***. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
 
 ```{r}
-#| label: skewed_feats
+#| label: fig-skewed-feats
 #| fig-cap: "Correlated numerical predictors are skewed and contain zero values."
 
 ames_train |>  
@@ -848,7 +836,7 @@ OK! We can see the power of adding good predictors in the test RMSE estimation
 
 My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0812. The result was transformed in the pipeline, therefore no units are displayed.
 
-[I got slightly better results using dummy encoded factors. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-cherry_picking_feats.]{.column-margin}
+[I got slightly better results using dummy encoded factors. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-skewed-feats.]{.column-margin}
 
 ## Elastic-Net Regression
 
@@ -861,18 +849,22 @@ I'll choose Elastic Net regression, combining the best of Lasso and Ridge. I mus
 ```{r}
 #| label: Elastic-net-setup
 
+# install.packages("embed")
+library(embed)
+
 # Elastic Net
 glmnet_base_rec <-
   recipe(SalePrice_bc ~ ., data = ames_train) |>
   update_role(Id, new_role = "Id variable") |>
   update_role(SalePrice, new_role = "original outcome") |>
   update_role(dataset, new_role = "splitting variable") |>
+  step_lencode_glm(MSSubClass, outcome = vars(SalePrice_bc)) |>
   step_dummy(all_nominal_predictors()) |>    
   step_YeoJohnson(all_numeric_predictors()) |>
   step_zv(all_predictors()) |> 
   step_normalize(all_numeric_predictors())
   
-# glmnet_base_rec |> prep() |> bake(new_data = NULL) 
+glmnet_base_rec |> prep() |> bake(new_data = NULL) 
 
 # library(usemodels)  # CheatSheets
 
@@ -890,27 +882,29 @@ glmnet_wf <-
 
 # penalty = lambda; mixture = alpha
 
+# penalty_ <- 10^seq(-4, -1, length.out = 20)
 # mixture_ = c(0.05, 0.2, 0.4, 0.6, 0.8, 1)
-mixture_ = c(0.5, 0.55, 0.6, 0.65, 0.7)
+penalty_ <- 10^seq(-3, -2, length.out = 30)
+mixture_ <- c(0.5, 0.55, 0.6, 0.65, 0.7)  # TODO: ADD 0.45
 
-glmnet_grid <- tidyr::crossing(penalty = 10^seq(-4, -1, length.out = 20), 
+glmnet_grid <- tidyr::crossing(penalty = penalty_, 
                                mixture = mixture_)
 
 # Tune with Folds
-set.seed(1982)
-doParallel::registerDoParallel()
+# set.seed(1982)
+# doParallel::registerDoParallel()
 
-glmnet_tune <- tune_grid(glmnet_wf, 
-                         resamples = ames_folds,  # CV is faster!
-                         grid = glmnet_grid)
+# glmnet_tune <- tune_grid(glmnet_wf, 
+#                          resamples = ames_folds,  # CV is faster!
+#                          grid = glmnet_grid)
 
 # Explore Results 
-show_best(glmnet_tune, metric = "rmse")
+# show_best(glmnet_tune, metric = "rmse")
 
 # Set best parameters
-final_glmnet <- glmnet_wf |>
-  finalize_workflow(select_best(glmnet_tune, metric = "rmse"))
+# final_glmnet <- glmnet_wf |> finalize_workflow(select_best(glmnet_tune, metric = "rmse"))
 
+final_glmnet <- read_rds(file = "./models/final_models/final_glmnet.rds")
 final_glmnet
 
 # write_rds(final_glmnet, file = "./models/final_models/final_glmnet.rds")
@@ -921,9 +915,9 @@ final_glmnet
 
 ```{r}
 #| label: final_glmnet
-#| code-fold: false
+#| eval: false
 
-# read_rds(file = "./models/final_models/final_glmnet.Rdata")
+# final_glmnet <- read_rds(file = "./models/final_models/final_glmnet.rds")
 # final_glmnet
 
 glmnet_boot_fit <- 
@@ -936,6 +930,8 @@ glmnet_boot_fit |>
 ```
 
 A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were the best parameters.
+
+New fit with new feature engineering, mean RMSE = 0.0637 (1000 Bootstraps). **Kaggle's Top 15%**. Best so far...
 
 #### Elastic-Net Submission
 
@@ -960,11 +956,9 @@ res_elasticnet <-
 
 # .csv for submission
 sub_elasticnet <- data.frame(Id = ames_test$Id, SalePrice = res_elasticnet$SalePrice_pred)
-write.csv(sub_elasticnet, "./data/submissions/jthom_sub_3_elasticnet.csv", quote = FALSE, row.names = FALSE)
+write.csv(sub_elasticnet, "./data/submissions/jthom_sub_4_elasticnet.csv", quote = FALSE, row.names = FALSE)
 
 ```
-
-New fit with new feature engineering, mean RMSE = 0.0640 (1000 Bootstraps). **Kaggle's Top 15%**. Best so far...
 
 ### XGBoost Regression
 
@@ -1031,6 +1025,14 @@ final_xgboost <- xgboost_wf |>
 
 final_xgboost
 
+# Assessment of test error
+xgboost_boot_fit <- 
+  final_xgboost |> 
+  fit_resamples(resamples = ames_boots)
+  
+xgboost_boot_fit |>
+  collect_metrics(summarize = TRUE)
+
 write_rds(final_xgboost, file = "./models/final_models/final_xgboost.rds")
 
 ```
@@ -1063,4 +1065,17 @@ write.csv(sub_xgboost, "./data/submissions/jthom_sub_4_xgboost.csv", quote = FAL
 
 ## Models Stacking
 
-To be continue...
+### Mean of Predictions
+
+The simplest ensemble often very effective when the nature of the models are different, like in this case!
+The Elastic-Net regression had a better RMSE than the XGBoost, therefore I can weight it more.
+
+```{r}
+#| label: stack_1
+#| eval: false
+
+sub_stack_1 <- (elastic_net_pred + elastic_net_pred + xgboost_pred)/3
+
+
+
+```

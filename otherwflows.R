@@ -191,3 +191,12 @@ final_rf
 #   collect_metrics(summarize = TRUE)
 
 # For curiosity, I fitted the 1000 bootstraps to the **best rf candidate** (code above) obtaining a mean RMSE = 0.0772
+
+
+
+#| label: lumping
+
+# ames_all <- 
+#   ames_all |>
+#   mutate(OverallQual = fct_lump(OverallQual, n = 8)) |>
+#   mutate(OverallQual = fct_relevel(OverallQual, "Other"))  
