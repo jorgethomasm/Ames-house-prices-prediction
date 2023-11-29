@@ -29,23 +29,23 @@ source("./tools/jthomfuncs.r")
 theme_set(jthomggtheme)
 ```
 
-::: {#fig-intro layout-ncol=2}
-![Houses](./imgs/ames_gai_16x9.jpeg){width=100%}
+::: {#fig-intro layout-ncol="2"}
+![Houses](./imgs/ames_gai_16x9.jpeg){width="100%"}
 
-![Location](./imgs/Ames_map.png){width=100%}
+![Location](./imgs/Ames_map.png){width="100%"}
 
 Ames, Iowa - USA.
 :::
 
 # Introduction
 
-In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] you'll follow my workflow developing pipelines on the ETL phase of the DS cycle, as well as a tidy approach on the EDA substantialy supported on Visual Analytics. I'll be feeding some tips on the right margin along the analysis.
+In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] you'll follow my workflow developing pipelines on the ETL phase of the DS cycle using the R programming language [@R-base], as well as a tidy approach on the EDA substantially supported on Visual Analytics. I'll be feeding some tips on the right margin along the analysis.
 
 The Ames House dataset was prepared to improve on the older classic Boston Houses dataset and, given its open competition nature, it comprises two files:
 
-1. One file contains features and labels or what's the same predictors and responses. Here this is the *training dataset*. It's all I have to split the ***Data Budget***.
+1.  One file contains features and labels or what's the same predictors and responses. Here this is the *training dataset*. It's all I have to split the ***Data Budget***.
 
-2. Another file contains only features (predictors) to make predictions for the final submissions. Here this is the *test dataset*.
+2.  Another file contains only features (predictors) to make predictions for the final submissions. Here this is the *test dataset*.
 
 The goal of the competition is to achieve minimum RMSE.
 
@@ -55,8 +55,7 @@ I will keep updating this notebook, making improvements and reporting the rank o
 
 ## Extract Data
 
-I checked beforehands that there are no missing values, here `NA`, in the target variable `SalePrice`. 
-Therefore, I will write a pipeline to read and concatenate both datasets (bind rows), adding and extra column `dataset` to label as "train" and "test" for further easy splitting[^1] (subset or filter).
+I checked beforehand that there are no missing values, here `NA`, in the target variable `SalePrice`. Therefore, I will write a pipeline to read and concatenate both datasets (bind rows), adding and extra column `dataset` to label as "train" and "test" for further easy splitting[^1] (subset or filter).
 
 [^1]: The whole Feature Transformation pipeline most be always the same for all predictors in both datasets.
 
@@ -85,17 +84,15 @@ print("Available variables:")
 names(ames_all)
 ```
 
-In order to organise my **Data Budget** I count on the **train dataset** with 1460 Observations of 79 predictors (one column is only an `Id` per house) and the Response, which is the `SalePrice` of the houses at the end of the list above.
-
-Note that `Id` and the just added `dataset` columns are not predictors. Hence, there are **78 features** to play  with. Also rememeber that the number of features for modelling will vary. Some will be discarded and some will be created along the analysis.
+In order to organise my **Data Budget** I count on the **train dataset** with 1460 Observations. Note that `Id` and the just added `dataset` columns are not predictors. Hence, there are **78 features** to play with. Also remember that the number of features for modelling will vary. Some will be discarded and some will be created along the analysis.
 
 ## Impute Missing Values
 
-First things first, read the full [data description](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data)[^2]. There you'll find that for several columns, missing values `NA` means actually *"None"*. The physical absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the response `SalePrice`. Later it is most probably that binary features indicating the existance of some installations should be created.
-
-Therefore, I will fill the empty `NA` fields of the indicated columns of both datasets with the string *"None"*.
+First things first, read the full [data description](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data)[^2]. There you'll find that for several columns, missing values `NA` means actually *"None"*. The physical absence of a determined feature in a house is a category exposing the lack of such quality that can have a significant impact on the response `SalePrice`. Later it is most probably that binary features indicating the existence of some installations should be created.
 
 [^2]: **Print a copy**, make notes and study it. This is the first step to get into domain knowledge, in this case Real Estate, for later *Feature Engineering*.
+
+Therefore, I will fill the empty `NA` fields of the indicated columns of both datasets with the string *"None"*.
 
 ```{r}
 #| label: easy replace_na
@@ -113,10 +110,9 @@ ames_all <- ames_all |>
   replace_na(cols_NA_to_none)   
 ```
 
-One of the early and recurrent steps of the EDA is to check the **completeness of data**. Let's search for missing values, after filling indicated fields[^3]. 
-For this case I wrote the function `count_na()` that generates the table displayed on the right margin.
+One of the early and recurrent steps of the EDA is to check the **completeness of data**. Let's search for missing values, after filling indicated fields[^3]. For this case I wrote the function `count_na()` that generates the table displayed on the right margin.
 
-[^3]: **Write a function to quantify missing values** depending on the language and labelling system used. 
+[^3]: **Write a function to quantify missing values** depending on the language and labelling system used.
 
 ```{r}
 #| label: Counting NAs
@@ -132,18 +128,18 @@ ames_all |>
 
 I'll fill the remaining missing values as follow:
 
-- The `LotFrontage` column refers to the linear feet of street connected to the house. This feature is not well documented and the missing percentage related to other variables makes it not only unreliable, but very low in variance. Therefore, I will delete the feature.
+-   The `LotFrontage` column refers to the linear feet of street connected to the house. This feature is not well documented and the missing percentage related to other variables makes it not only unreliable, but very low in variance. Therefore, I will delete the feature.
 
-- Everytime a Garage doesn't exist, i.e., `GarageType = "None"`, there is the corresponding missing value in Garage Year Built `GarageYrBlt = NA`. I will **engineer a new feature** called `GarageNew` with three ordinal categories: None, No, Yes. This based on the delta of `YearBuilt - GarageYrBlt`; I expect that given the house price, the algorithm will learn that "None" is worse than "No" and so on. Then I will remove the `GarageYrBlt` predictor.
+-   Everytime a Garage doesn't exist, i.e., `GarageType = "None"`, there is the corresponding missing value in Garage Year Built `GarageYrBlt = NA`. I will **engineer a new feature** called `GarageNew` with three ordinal categories: None, No, Yes. This based on the delta of `YearBuilt - GarageYrBlt`; I expect that given the house price, the algorithm will learn that "None" is worse than "No" and so on. Then I will remove the `GarageYrBlt` predictor.
 
-- For the rest of variables with a 1 % or less missing values `NA`, I'll calculate the **median** (if numerical) and the **mode** (if string) in order to fill them with it.
+-   For the rest of variables with a 1 % or less missing values `NA`, I'll calculate the **median** (if numerical) and the **mode** (if string) in order to fill them with it.
 
 Here's my pipeline for the whole dataset:
 
 ```{r}
 #| label: terminating NAs
 
-# "replace_na_with_median" is a custom function
+# "replace_na_with_median" is a function I created
 
 ames_all <- ames_all |>
   mutate(LotFrontage = NULL) |> # Removing LotFrontage
@@ -183,12 +179,47 @@ ames_all |>
 
 **"The data is complete!"** Let's think about predictors.
 
+There are variables (columns) starting with numbers? I'll rename them:
+
+``` {r}
+#| label: rename_cols
+
+ames_all <-
+  ames_all |>
+  rename(FirstFlrSF = "1stFlrSF") |>
+  rename(SecondFlrSF = "2ndFlrSF") |>
+  rename(threessnporch = "3SsnPorch")
+
+```
+
+### Screening of variable importance
+
+Using the **Mutual Information criterion (MI)**, I'll rank the extent to which knowledge of each original predictor reduces the uncertainty of `SalePrice`.
+
+```{r}
+#| label: mutual-info
+#| column: margin
+#| code-fold: false
+
+library(infotheo)
+
+# "calc_mi" is a function I wrote.
+
+mi_y_X <- ames_all |>
+  filter(dataset == "train") |>
+  select(-c(Id, dataset)) |>
+  calc_mi_score(target = "SalePrice")
+
+mi_y_X |> 
+  head(20) |>
+  knitr::kable(caption = "Mutual Info")
+```
+
 ## Feature Engineering
 
 I have already started with the creation of a new predictor in the previous step, this to substitute the problematic variable `GarageYrBlt` that had a lot of missing values.
 
-Feature creation and transformations are not sequential, i.e., this is not the only step where *Feature Engineering* is applied. 
-Think about the next *modelling phase*, where you want to reduce features, e.g., where new Principal Components are the new aggregators of original features.
+Feature creation and transformations are not sequential, i.e., this is not the only step where *Feature Engineering* is applied. Think about the next *modelling phase*, where you want to reduce features, e.g., where new Principal Components are the new aggregators of original features.
 
 In this part I will establish which variables are categorical and numerical; this is not always as obvious as it seems[^4].
 
@@ -196,37 +227,41 @@ In this part I will establish which variables are categorical and numerical; thi
 
 The first easy thing that comes to mind is to add the **total area of the property** as a new column named `TotAreaSF`; SF means *Squared Feet*.
 
-After that, I check the [data documentation](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data) to see which variables can be thought as categoricals (factors); this can be tedeous if Real Estate is not your domain of expertise. 
+After that, I check the [data documentation](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data) to see which variables can be thought as factors; this can be tedious if Real Estate is not your domain of expertise.
 
-After 1.5 hours of reading, googling, understanding other notebooks and deliberating (yes, it was tedeous), I can summarise four types of ways to engineer new features depending on the nature of the variables:
+After 1.5 hours of reading, googling, understanding other notebooks and deliberating (yes, it was tedious), I can summarise four types of ways to engineer new features depending on the nature of the variables:
 
-1. Aggregation to a total of **continuous-numerical** surface area (Square Feet), e.g. new `TotInteriorArea` Feat. summing basement and floors, etc. Same for a new `TotExteriorArea`. Then deleting the addends variables.
+1.  Aggregation to a total of **continuous-numerical** surface area (Square Feet), e.g. new `TotalIntArea` Feat. summing basement and floors, etc. Same for a new `TotalExtArea`. Then deleting the addends variables.
 
-2. Aggregation to a total of **counts-numerical** of an available installation of a determined type, e.g. new `TotBaths`. Then deleting the addends.
+2.  Aggregation to a total of **counts-numerical** of an available installation of a determined type, e.g. new `TotBaths`. Then deleting the addends.
 
-3. Categorisation with ascending quality levels of the originally numerical variables `OverallQual` and `OverallCond`. 
+3.  Categorisation with ascending quality levels of the originally numerical variables `OverallQual` and `OverallCond`.
 
-4. Creation of new **binary** features that state if a determined installation exists or doesn't.
+4.  Creation of new **binary** features that state if a determined installation exists or doesn't.
+
+[After my second Kaggle submission (Top 25%) I completed the [Feature Engineering course](https://www.kaggle.com/learn/feature-engineering) that has a lot of tips for this projects.
+I included some new features and tricks from there]{.column-margin}
 
 Here's the code that complies with the four previous steps:
 
 ```{r}
 #| label: Feature Engineering
 
+
 # --- Total Aggregations ----
 ames_all <- ames_all |>
 
   # Continuous numerical ----
   # NEW TotalInteriorArea
-  mutate(TotInteriorArea = BsmtFinSF1 + BsmtFinSF2 + `1stFlrSF` + `2ndFlrSF`) |>
-  select(-c(BsmtFinSF1, BsmtFinSF2, `1stFlrSF`))|> # Bye bye...
+  mutate(TotalIntArea = BsmtFinSF1 + BsmtFinSF2 + FirstFlrSF + SecondFlrSF) |>
+  select(-c(BsmtFinSF1, BsmtFinSF2, `FirstFlrSF`))|> # Bye bye...
 
   # NEW HouseAge
   # mutate(HouseAge = YrSold - YearBuilt) |>  # Same as YearBuilt
 
   # NEW TotalExteriorArea
-  mutate(TotExteriorArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + `3SsnPorch` + ScreenPorch) |>
-  select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, `3SsnPorch`, ScreenPorch)) |># Bye bye...
+  mutate(TotalExtArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + threessnporch + ScreenPorch) |>
+  select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, `threessnporch`, ScreenPorch)) |> # Bye bye...
 
   # Counting numerical ----
   # NEW TotalBaths
@@ -235,14 +270,44 @@ ames_all <- ames_all |>
 
 
 # ---- Ordered Categorical Features ----
+
+# Check which columns have "None"
+# sapply(ames_all, function(x) sum(x == "None"))
+
 ames_all <- ames_all |>
+  # 10 Levels:
   mutate(OverallQual = factor(OverallQual)) |>
-  mutate(OverallCond = factor(OverallCond))  # Check level orders 1, ..., 10 (BEST)
+  mutate(OverallCond = factor(OverallCond)) |> 
+
+  # 5 Levels + None
+  mutate(ExterQual = factor(ExterQual, c("Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(ExterCond = factor(ExterCond, c("Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(BsmtQual = factor(BsmtQual, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(BsmtCond = factor(BsmtCond, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(HeatingQC = factor(HeatingQC, c("Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(KitchenQual = factor(KitchenQual, c("Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(FireplaceQu = factor(FireplaceQu, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(GarageQual = factor(GarageQual, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(GarageCond = factor(GarageCond, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
+  mutate(PoolQC = factor(PoolQC, c("None", "Po", "Fa", "TA", "Gd", "Ex"))) |>
+
+  #  Others:
+  mutate(LotShape = factor(LotShape, c("Reg", "IR1", "IR2", "IR3"))) |>
+  mutate(LandSlope = factor(LandSlope, c("Sev", "Mod", "Gtl"))) |>
+  mutate(BsmtExposure = factor(BsmtExposure, c("None", "No", "Mn", "Av", "Gd"))) |>
+  mutate(BsmtFinType1 = factor(BsmtFinType1, c("None", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"))) |>
+  mutate(BsmtFinType2 = factor(BsmtFinType2, c("None", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"))) |>
+  mutate(Functional = factor(Functional, c("Sal", "Sev", "Maj1", "Maj2", "Mod", "Min2", "Min1", "Typ"))) |>
+  mutate(GarageFinish = factor(GarageFinish, c("None", "Unf", "RFn", "Fin"))) |>
+  mutate(PavedDrive = factor(PavedDrive, c("N", "P", "Y"))) |>
+  mutate(Utilities = factor(Utilities, c("NoSeWa", "NoSewr", "AllPub"))) |>  
+  mutate(Electrical = factor(Electrical, c("Mix", "FuseP", "FuseF", "FuseA", "SBrkr"))) |>
+  mutate(Fence = factor(Fence, c("None", "MnWw", "GdWo", "MnPrv", "GdPrv")))
 
 
-# ---- Binary Features ----
+# ---- New Binary Features ----
+
 # Does the installation or Feature exist? 
-
 ames_all <- ames_all |>
   # CentralAir
   mutate(CentralAir = if_else(CentralAir == "N", "No", "Yes")) |>
@@ -267,8 +332,8 @@ ames_all <- ames_all |>
   mutate(ExistBsmt = fct_relevel(ExistBsmt, "No", "Yes"))|>
 
   # NEW Exist2ndFloor
-  mutate(Exist2ndFloor = if_else(`2ndFlrSF` == 0, "No", "Yes")) |>
-  select(-`2ndFlrSF`) |> # Bye, bye... 
+  mutate(Exist2ndFloor = if_else(`SecondFlrSF` == 0, "No", "Yes")) |>
+  select(-`SecondFlrSF`) |> # Bye, bye... 
   mutate(Exist2ndFloor = fct_relevel(Exist2ndFloor, "No", "Yes")) |>
 
   # NEW ExistFireplace
@@ -280,12 +345,15 @@ ames_all <- ames_all |>
   mutate(ExistMasVeneer = factor(ExistMasVeneer, levels = c("No", "Yes")))
  
 
-# ---- The rest are factors ----
+# ---- Unordered factors ----
 
-# I'm going to assume that the rest are Categorical variables 
+# Nominative (unordered) categorical Feats
+cats_feats <- c("MSSubClass", "MSZoning", "Street", "Alley", "LandContour", "LotConfig", "Neighborhood", "Condition1", "Condition2", "BldgType", "HouseStyle", "RoofStyle", "RoofMatl", "Exterior1st", "Exterior2nd", "MasVnrType", "Foundation", "Heating", "CentralAir", "GarageType", "MiscFeature", "SaleType", "SaleCondition")
+
 ames_all <- ames_all |>
-  mutate(across(where(is.character), factor)) |>
-  mutate(YrSold = factor(YrSold))  # Convert to factor
+  #mutate(across(where(is.character), factor)) |>
+  mutate(across(all_of(cats_feats), factor))
+  
 
 
 # ---- Numerical Features ----
@@ -310,7 +378,7 @@ ames_all$PoolArea <- NULL
 
 Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable, similar to what I did with the new `GarageNew` column.
 
-OK! Let's move on. 
+OK! Let's move on.
 
 ### Searching for simple correlations
 
@@ -320,7 +388,7 @@ Although **nothing is linear**, is good to have an idea of simple correlations b
 #| label: fig-num-corr
 #| fig-width: 8
 #| fig-height: 8
-#| fig-cap: Pearson's correlation of numeric features and response. High multicollinearity.
+#| fig-cap: The Pearson's correlation of numeric features and response shows high presence of multicollinearity.
 #| warning: false
 #| message: false
 
@@ -336,7 +404,7 @@ ames_all |>
 
 ```
 
-According to the matrix above, `GrLivArea` has the strongest linear relationship with the target `SalePrice`, followed by `TotInteriorArea`, this given the collinearity with `GrLivArea`, and then `GarageArea` or `GarageCars`, both heavily correlated too, like commented before. 
+According to the matrix above, `GrLivArea` has the strongest linear relationship with the target `SalePrice`, followed by `TotalIntArea`, this given the collinearity with `GrLivArea`, and then `GarageArea` or `GarageCars`, both heavily correlated too, like commented before.
 
 I'm leaving blank, i.e., without a circle, the insignificant correlations for better visualisation and focus. Now I'm checking the categorical variables and the response.
 
@@ -359,15 +427,15 @@ ames_all |>
 
 ```
 
-The best linear association with `SalePrice` is given by `OverallQual` factor, followed by everything else that has to do with *quality* ratings. 
+The best linear association with `SalePrice` is given by `OverallQual` factor, followed by everything else that has to do with *quality* ratings.
 
-Here, the highest collinearity is showed between `PoolQC` and the new `ExistPool` variables. This is because they share a majority ammount of "None" and "No" values respectivelly in the exact same positions, therefore making the information redundant. In case of one-hot enconding there would be two repeated colums.
+Here, the highest collinearity is showed between `PoolQC` and the new `ExistPool` variables. This is because they share a majority ammount of "None" and "No" values respectively in the exact same positions, therefore making the information redundant. In case of performing one-hot encoding there would be two repeated columns.
 
-Overall, one can see clearly the **multicollinearity** clusters, which suggest the use of advance **Feature Selection** techniques.
+Overall, one can see clearly the **multicollinearity** clusters, which suggest the use of advanced **Feature Selection** techniques.
 
 ### Visual Exploration
 
-Now with the previous information in hand, I'm going to visualise separatelly the two most important quasi-linear relationsships: `GrLivArea` and `OverallQual` vs. `SalePrice`.
+Now with the previous information in hand, I'm going to visualise separately the two most important quasi-linear relationships: `GrLivArea` and `OverallQual` vs. `SalePrice`.
 
 ```{r}
 #| label: fig-cont_linear
@@ -404,7 +472,7 @@ ames_all |>
 
 ```
 
-The hexbin plot reveals three cells of price and size where houses are more common in the training dataset. **There are more than 50 houses for each bin in the range of 130K, 140K and 180K USD** aproximately.
+The hexbin plot reveals three cells of price and size where houses are more common in the training dataset. **There are more than 50 houses for each bin in the range of 130K, 140K and 180K USD** approximately.
 
 On the other hand, note how **problematic are the outliers** with the spline fit! This visual allows me to *remove outliers*, i.e., the biggest and cheap houses (right data points).
 
@@ -438,10 +506,9 @@ ames_all |>
               size = 1.5, 
               alpha = 0.5) +
   theme(legend.position = "none", axis.title.y = element_text(angle = 90))
-
 ```
 
-The **two big houses above were like super offers!** Or did the housing bubble exploded?
+The **two big houses above were super offers!** Or did the housing bubble exploded?
 
 In the same fashion, I want to see the effect of the factor `OverallQual`.
 
@@ -464,7 +531,6 @@ ames_all |>
   labs(x = "Overall\nQuality", y = "Sale Price ['000 $]") +
   coord_flip() + 
   theme(legend.position = "none")
-
 ```
 
 #### I'm wondering in which price range is the most popular quality?
@@ -486,7 +552,7 @@ ames_all |>
   theme(legend.position = "none", axis.title.y = element_text(angle = 90))
 ```
 
-It seems that most  popular houses, with an overall qualilty of 5 (mid-quality level), are the ones between 120K and 145K USD. Of course, this was back in the years of 2006 - 2010.
+It seems that most popular houses, with an overall quality of 5 (mid-quality level), are the ones between 120K and 145K USD. Of course, this was back in the years of 2006 - 2010.
 
 Now I'll group or lump into one category `OverallQual = 1` and `OverallQual = 2`.
 
@@ -523,12 +589,11 @@ ames_all |>
               alpha = 0.5) +
   facet_wrap(~HouseStyle, nrow = 2) +
   theme(legend.position = "bottom")
-
 ```
 
 #### How sale prices vary with the living area and depending on location?
 
-One can hear often that *location is everything*; let's see here:
+One can hear often that **location is everything**. Let's see it here:
 
 ```{r}
 
@@ -552,24 +617,6 @@ ames_all |>
   facet_wrap(~Neighborhood, nrow = 3) +
   theme(legend.position = "bottom")
 ```
-
-### Variable importance screening
-
-Using the **Mutual Information (MI)** criterion I'll rank the extent to which knowledge of one predictor reduces the uncertainty of `SalePrice`.
-
-```{r}
-#| label: mutual-info
-library(infotheo)
-
-ames_all |>
-  filter(dataset == "train") |>
-  select(-c(Id, dataset)) |>
-  calc_mi(target = "SalePrice") |>
-  head(15) |>
-  knitr::kable(caption = "Feat. Importance Screening")
-
-```
-
 
 ### Analysis of response SalePrice
 
@@ -603,23 +650,21 @@ ames_all |>
   scale_y_continuous(breaks = seq(0, 800, 50), labels = scales::comma) +
   labs(y = "Sale\nPrice\n['000 $]",
        x = "Theoretical Quantiles (Norm. Dist.)")
-
 ```
 
-Clearly, the target variable (Y) is not well-bahaved. It shows a log-normal distribution heavily skewed, to right of course. In order to achieve better predictions, a transformation might be needed.
+Clearly, the target variable is not well-behaved. It shows a log-normal distribution heavily skewed, to right of course. In order to achieve better predictions, a transformation might be needed.
 
 #### Transformation of the response
 
-For what I've seen, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time **Log-normal**. 
-Rarely there is something free, so you don't have zeros or with negativ value; think about the top 1% of reach people, or anything that becomes **premium** the higher the price. These are long and sparsed right tails.
+For what I've seen, processes that have to do with *money*, e.g., sale prices, costs of products, salaries, they are most of the time **Log-normal**. Rarely there is something free, so you don't have zeros or with negative value; think about the top 1% of reach people, or anything that becomes **premium** the higher the price. These are long and sparse right tails.
 
-The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive hauses. The logarithm scale will shrink that right tail[^5], making the distribution more normal-like.
+The logarithmic transformation works when there are few large values, like in this case, there are only a few expensive houses. The logarithm scale will shrink that right tail[^5], making the distribution more normal-like.
 
 [^5]: Think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
 
-Nevertheless, the moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best[^6]. 
+Nevertheless, the moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best[^6].
 
-[^6]: Forget about linearity and interpretability if you want the most accurate results.  
+[^6]: Forget about linearity and interpretability if you want the most accurate results.
 
 Because we have powerful computers and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of functions that includes the logarithmic one depending on the value of a parameter *lambda*. This parameter is automatically assessed.
 
@@ -687,20 +732,21 @@ ames_all |>
 
 # PHASE 2: MODELLING
 
-&emsp; *"This is where the fun begins."* 
+  *"This is where the fun begins."*
 
 One of the motivations to develop this project is because I'm switching to the **Tidymodels** framework. Therefore, it's time to load the library to train a simple reference model.
 
 ## Resampling Technique for Test Error Estimation
+
 This is a critical step for final model selection. Depending on the chosen resample technique to estimate the Goodness-of-Prediction or test error, in this case metrics like RMSE can be slightly optimistic or conservative. Take a look at the pristine explanation by [@resamplingML].
 
-- **Simple validation set?** 1 train fold and 1 test fold: NO, it's old and innacurate.
-- **v-folds Cross-Validation?** Analysis (training folds), Assessment (validation folds) and test: it's *small data*, I can choose something even more powerful.
-- **The Bootstrap?** YES.
+-   **Simple validation set?** 1 train fold and 1 test fold: NO, it's old and inaccurate.
+-   **v-folds Cross-Validation?** Analysis (training folds), Assessment (validation folds) and test: it's *small data*, I can choose something even more powerful.
+-   **The Bootstrap?** YES.
 
-By today's standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the *assessment set*. Although performance metrics will be slightly conservative or pesimistic, I prefer it.
+By today's standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the *assessment set*. Although performance metrics will be slightly conservative or pessimistic, I prefer it.
 
-I will generate 1000 bootstrap-samples. 
+I will generate 1000 bootstrap-samples.
 
 ## Expending the data budget
 
@@ -722,13 +768,10 @@ ames_train <-
  
 
 # ---- v-folds Cross Validation ----
-
-# v-folds CV repeated 10 times (v x 10 models)
 set.seed(1982)
 ames_folds <- vfold_cv(ames_train, v = 10, repeats = 10, strata = SalePrice_bc) # v = 10 folds are default
 
 # ---- The Bootstrap ----
-
 set.seed(1982)
 ames_boots <- bootstraps(ames_train, times = 1000, strata = SalePrice_bc)
 ames_boots  
@@ -736,19 +779,19 @@ ames_boots
 
 ## Base Worflows Set
 
-My final objective is to stack (combine / ensemble) several models of different nature. However, for a first model I'd like to keep interpretability. 
+My final objective is to stack (combine / ensemble) several models of different nature. However, for a first model I'd like to keep interpretability.
 
 ### Linear Models
 
-**Where to start?** In order to have a set of refence good models, I will proceed as follows:
+**Where to start?** In order to have a set of reference models, I will proceed as follows:
 
-- Cherry-picking predictors with linear influence from correlograms @fig-num-corr and @fig-cat-corr.
-- Establish a ***workflow set*** of linear models:
-  - Fit the simplest OLS univariate lm `GrLivArea` vs. `SalePrice`.
-  - Cherry-pick predictors and fit a linear hyper-plane: multivariate lm.
-  - Add some flexibility on top fitting a Spline GAM.
+-   Cherry-picking predictors with linear influence from correlograms @fig-num-corr and @fig-cat-corr.
+-   Establish a ***workflow set*** of linear models:
+    -   Fit the simplest OLS univariate lm `GrLivArea` vs. `SalePrice`.
+    -   Cherry-pick predictors and fit a linear hyper-plane: multivariate lm.
+    -   Add some flexibility on top fitting a Spline GAM.
 
-For the sake of RMSE metric comparison I will always scale numeric predictors and use the Box-Cox transformed response `SalePrice_bc`, this given the improvement shown in @fig-Y-trans. 
+For the sake of RMSE metric comparison I will always scale numeric predictors and use the Box-Cox transformed response `SalePrice_bc`, this given the improvement shown in @fig-Y-trans.
 
 The following code shows preprocessing steps enclosed in a pipeline or ***recipe***. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
 
@@ -765,7 +808,7 @@ ames_train |>
   facet_wrap(~name, scales = "free")
 ```
 
-Given the sensitivity to tails and outliers of linear models, remember @fig-cont_linear-1, it will be convienent to try to normalise the distribution of these predictors. However, Box-Cox transformations work only for positive data. The alternative will be the more general **Yeo-Johnson transformation**, which works for both, positive and negative values.
+Given the sensitivity to tails and outliers of linear models, remember @fig-cont_linear-1, it will be convenient to try to normalise the distribution of these predictors. However, Box-Cox transformations work only for positive data. The alternative will be the more general **Yeo-Johnson transformation**, which works for both, positive and negative values.
 
 [Note that `SalePrice_bc` is the transformed outcome. Click [here](https://www.tmwr.org/recipes.html#skip-equals-true) for more info.]{.column-margin}
 
@@ -774,15 +817,13 @@ Given the sensitivity to tails and outliers of linear models, remember @fig-cont
 
 # ---------- Preprocessing Pipelines ----------
 
-# Uni-lm (simplest reasonable model)
+# Uni-lm (SIMPLEST reasonable model)
 simplest_rec <-
   recipe(SalePrice_bc ~ GrLivArea, data = ames_train) |>  
   step_YeoJohnson(GrLivArea) |>
   step_normalize(all_numeric_predictors())
 
-# Sanity check for warnings:
-# simplest_rec |> prep() |>  bake(new_data = NULL)
-
+# simplest_rec |> prep() |>  bake(new_data = NULL) # Sanity check for warnings
 
 # Multi-lm 
 multi_lm_rec <-
@@ -791,8 +832,7 @@ multi_lm_rec <-
   step_normalize(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors())
 
-# Sanity check for warnings:
-# multi_lm_rec |> prep() |> bake(new_data = NULL)
+# multi_lm_rec |> prep() |> bake(new_data = NULL) # Sanity check for warnings
 
 # GAM: Splines 
 multi_gam_rec <-
@@ -811,8 +851,10 @@ lm_spec <-
 my_lm_recipes <- list(simplest_rec, multi_lm_rec, multi_gam_rec)
 my_lms_specs <- list(lm_spec)
 
-# With a workflow set I can combine a list of pre-processors with a list of models:
-ames_wfset <- workflow_set(my_lm_recipes, my_lms_specs, cross = TRUE, case_weights = NULL)
+# Combine a list of pre-processors with a list of models:
+ames_wfset <- workflow_set(my_lm_recipes, my_lms_specs, 
+                           cross = TRUE, 
+                           case_weights = NULL)
 ames_wfset
 
 
@@ -832,16 +874,14 @@ ames_lms_res |>
   collect_metrics(summarize = TRUE) |>
   select(-c(.estimator, .config)) |>
   filter(.metric == "rmse") |>
-  knitr::kable(caption = "3 Base lms")
-
-
+  knitr::kable(caption = "Three Base Linear Models")
 ```
 
 OK! We can see the power of adding good predictors in the test RMSE estimation
 
 My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0812. The result was transformed in the pipeline, therefore no units are displayed.
 
-[I got slighlty better results using one-hot encoded categoricals. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-cherry_picking_feats.]{.column-margin}
+[I got slightly better results using dummy encoded factors. Moreover, applying the Yeo-Johnson transformation to numeric Feats. helped too! They were skewed, see @fig-cherry_picking_feats.]{.column-margin}
 
 In order to see the feature importance, I'll train and extract the workflow of the simple, second model, i.e., the multivariate lm:
 
@@ -888,9 +928,9 @@ sub_1 <- data.frame(Id = ames_test$Id, SalePrice = res_1_bsplines$SalePrice_pred
 
 #### First Kaggle Submission and Result
 
-Ok! I got on the **top 59% (2825/4819)** cherry picking predictors and a GAM of splines. Not great, as expected, but it's an important referece.
+Ok! I got on the **top 59% (2825/4819)** cherry picking predictors and a GAM of splines. Not great, as expected, but it's an important reference.
 
-Now that I have some reference, I'll proceed with more complexity and involving all predictors in order to extract more signal. 
+Now that I have some reference, I'll proceed with more complexity and involving all predictors in order to extract more signal.
 
 ## Advanced Workflows
 
@@ -995,7 +1035,6 @@ final_glmnet
 
 save(final_glmnet, file = "./models/final_models/final_glmnet.Rdata")
 
-
 ```
 
 Load Elastic-Net workflow with best parameters:
@@ -1020,9 +1059,8 @@ A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were 
 
 For curiosity, I fitted the 1000 bootstraps to the **elastic net model** (code above) obtaining a mean RMSE = 0.0652. Best so far...
 
-
 ```{r}
-#| label: Elastic-Net_sub
+#| label: Elastic-Net_submission
 #| eval: false
 
 # Get best model and fit with whole training set
@@ -1119,24 +1157,18 @@ final_rf
 
 For curiosity, I fitted the 1000 bootstraps to the **best rf candidate** (code above) obtaining a mean RMSE = 0.0772
 
-
 ## Arbitrary Full Width Content
 
 ::: column-page-right
 *R is free software and comes with ABSOLUTELY NO WARRANTY.* You are welcome to redistribute it under the terms of the GNU General Public License versions 2 or 3. For more information about these matters see <https://www.gnu.org/licenses/>.
 :::
 
-
-# Sidenotes
-
-cite R here [@R-base].
-
 ::: {.callout-note appearance="simple"}
 This feature depends upon `link-citations` to locate and place references in the margin. This is enabled by default, but if you disable `link-citations` then references in the HTML output will be placed at the end of the output document as they normally are.
 :::
 
-
-::: {.callout-tip}
+::: callout-tip
 ## Using R within Chunk Options
+
 If you wish to use raw R expressions as part of the chunk options (like above), then you need to define those in the `tag=value` format within the curly brackets `{r label, tag=value}` instead of the `tag: value` YAML syntax on a new line starting with the hashpipe `#|`. The former approach is documented on [knitr's website](https://yihui.org/knitr/options/) while the latter is explained in [Quarto's documentation](https://quarto.org/docs/reference/cells/cells-knitr.html).
 :::

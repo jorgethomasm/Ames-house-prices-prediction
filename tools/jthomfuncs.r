@@ -60,28 +60,30 @@ find_mode <- function(x) {
 }
 
 
-#' Calculation of the Mutual Information (MI) criterion 
+#' Calculation of the Mutual Information (MI) criterion
 #' between Response and Predictors.
-#' 
 #' Requires the "infotheo" package!
 #'
 #' @author Jorge Thomas
-#' 
 #' @param data a data frame with Response (Target) and Predictors (features) columns.
 #' @param target a string with the column name of the Response.
-#' 
 #' @return an ordered and named list with the calculation of the Mutual Information Criterion
-calc_mi <- function(data, target) {
-  mi_list <- vector(mode = "list")
+calc_mi_score <- function(data, target) {
 
-  m_data <- infotheo::discretize(data.matrix(data))
+  mi_list <- vector(mode = "list")
+  disc_method <- "equalwidth" # "equalfreq" or "globalequalwidth"
+  numbins <- sqrt(nrow(data))
+  m_data <- infotheo::discretize(data.matrix(data),
+                                 disc = disc_method,
+                                 nbins = numbins)
 
   for (col_name in colnames(m_data)){
     mi_list[col_name] <- infotheo::mutinformation(m_data[, target], m_data[, col_name])
   }
-  sort(unlist(mi_list, use.names = TRUE), decreasing = TRUE)
-}
 
+  sort(unlist(mi_list, use.names = TRUE), decreasing = TRUE)
+
+}
 
 
 # get mode function
