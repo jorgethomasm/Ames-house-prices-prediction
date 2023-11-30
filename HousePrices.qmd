@@ -1,6 +1,6 @@
 ---
 title: "Prediction of House Prices in Ames"
-subtitle: "A commented and visual walk-through advance regression techniques." # only for html output
+subtitle: "A commented and visual walk-through advanced regression techniques." # only for html output
 author: "Jorge A. Thomas"
 date: "`r Sys.Date()`"
 format:    
@@ -25,6 +25,8 @@ bibliography: HousePrices.bib
 #| echo: false
 
 library(tidyverse) # ETL and EDA tools
+library(tictoc) # measure runtime
+
 source("./tools/jthomfuncs.r")
 theme_set(jthomggtheme)
 ```
@@ -181,7 +183,7 @@ ames_all |>
 
 There are variables (columns) starting with numbers? I'll rename them:
 
-``` {r}
+```{r}
 #| label: rename_cols
 
 ames_all <-
@@ -394,6 +396,7 @@ Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable,
 
 ```{r}
 #| label: recheck_mi
+#| column: margin
 
 # "calc_mi_score" is a function I wrote.
 
@@ -403,7 +406,7 @@ mi_y_X_2 <- ames_all |>
   calc_mi_score(target = "SalePrice")
 
 mi_y_X_2 |> 
-  head(30) |>
+  head(20) |>
   knitr::kable(caption = "Mutual Info")
 ```
 
@@ -632,7 +635,9 @@ ames_all |>
               size = 0.7, 
               alpha = 0.5) +
   facet_wrap(~Neighborhood, nrow = 4) +
-  theme(legend.position = "none")
+  theme(legend.position = "none", 
+        axis.text.y  = element_text(size = 8),        
+        axis.text.x  = element_text(size = 8, angle = 90))
 ```
 
 ### Analysis of response SalePrice
@@ -679,9 +684,7 @@ The logarithmic transformation works when there are few large values, like in th
 
 [^5]: Think of a **Logarithmic transformation** like pressing an **accordeon** only from your right arm.
 
-Nevertheless, the moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to work best[^6].
-
-[^6]: Forget about linearity and interpretability if you want the most accurate results.
+Nevertheless, the moment the first data transformation is performed, we start to loose interpretability very quickly. Nowadays, the most accurate predictions need more than one transformation in order to wor
 
 Because we have powerful computers and libraries with written functions to perform variable transformations, I will use the Box-Cox transformation, which is a family of functions that includes the logarithmic one depending on the value of a parameter *lambda*. This parameter is automatically assessed.
 
@@ -766,7 +769,6 @@ ames_all <-
   select(-all_of(noinfo_cols)) 
 ```
 
-
 ## Resampling for Test Error Estimation
 
 This is a critical step for final model selection. Depending on the chosen resample technique to estimate the Goodness-of-Prediction or test error, in this case metrics like RMSE can be slightly optimistic or conservative. Take a look at the pristine explanation by [@resamplingML].
@@ -778,6 +780,8 @@ This is a critical step for final model selection. Depending on the chosen resam
 By today's standards this dataset is small, therefore I will choose Bootstraping to keep the chosen samples the same size as the training set. The probability of an observation of being sample at least once is 0.63, therefore the complementary training set (around 37%) will become the *assessment set*. Although performance metrics will be slightly conservative or pessimistic, I prefer it.
 
 I will generate 1000 bootstrap-samples.
+
+[I will use 10-folds CV reapeated 10 times (100 splits) for the hyperparameter tuning of more complex algoritms. Once optimised, I'll assess the test error again with the 1000 bootstraps, for the sake of comparison.]{.column-margin}
 
 ## Expending the data budget
 
@@ -813,15 +817,15 @@ ames_boots
 
 For the sake of RMSE metric comparison I will always scale numeric predictors and use the Box-Cox transformed response `SalePrice_bc`, this given the improvement shown in @fig-Y-trans.
 
-The following code shows preprocessing steps enclosed in a pipeline or ***recipe***. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
+The following code shows the preprocessing steps enclosed in a pipeline or ***recipe***. The list of available *step functions* can be found [here](https://recipes.tidymodels.org/reference/index.html).
 
 ```{r}
 #| label: fig-skewed-feats
-#| fig-cap: "Correlated numerical predictors are skewed and contain zero values."
+#| fig-cap: "Sample of skewed numerical predictors that contain zero as value."
 
 ames_train |>  
-  select(c(GrLivArea, TotBaths, GarageArea, TotalBsmtSF, YearBuilt)) |> 
-  pivot_longer(GrLivArea:YearBuilt) |>
+  select(c(GrLivArea, TotBaths, GarageArea, TotalBsmtSF, YearBuilt, SecondFlrSF)) |> 
+  pivot_longer(GrLivArea:SecondFlrSF) |>
   ggplot(aes(x = value)) +  
   geom_histogram(bins = 50, color = "lightgrey", fill = "lightgrey") +  
   labs(x = "") + 
@@ -840,7 +844,7 @@ My reference is the **linear GAM with Splines**, showing a mean RMSE = 0.0812. T
 
 ## Elastic-Net Regression
 
-Having high multicollinearty it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
+Having high multicollinearity it's reasonable to think of some sort of penalisation or shrinkage method. Hence, I'll go with a Generalised Linear Model, [GLM](https://glmnet.stanford.edu/articles/glmnet.html). In this manner I can have a first look at feature importance.
 
 I'll choose Elastic Net regression, combining the best of Lasso and Ridge. I must remember to myself that *predictors* must be scaled! I don't want to over-penalised non-scaled variables using shrinkage methods.
 
@@ -849,7 +853,6 @@ I'll choose Elastic Net regression, combining the best of Lasso and Ridge. I mus
 ```{r}
 #| label: Elastic-net-setup
 
-# install.packages("embed")
 library(embed)
 
 # Elastic Net
@@ -864,7 +867,7 @@ glmnet_base_rec <-
   step_zv(all_predictors()) |> 
   step_normalize(all_numeric_predictors())
   
-glmnet_base_rec |> prep() |> bake(new_data = NULL) 
+# glmnet_base_rec |> prep() |> bake(new_data = NULL) 
 
 # library(usemodels)  # CheatSheets
 
@@ -880,12 +883,12 @@ glmnet_wf <-
   add_recipe(glmnet_base_rec) |>
   add_model(glmnet_spec)
 
-# penalty = lambda; mixture = alpha
+# penalty = lambda; mixture = alpha (0 - Ridge, 1- Lasso)
 
 # penalty_ <- 10^seq(-4, -1, length.out = 20)
 # mixture_ = c(0.05, 0.2, 0.4, 0.6, 0.8, 1)
 penalty_ <- 10^seq(-3, -2, length.out = 30)
-mixture_ <- c(0.5, 0.55, 0.6, 0.65, 0.7)  # TODO: ADD 0.45
+mixture_ <- c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6)
 
 glmnet_grid <- tidyr::crossing(penalty = penalty_, 
                                mixture = mixture_)
@@ -914,11 +917,8 @@ final_glmnet
 ### Elastic-Net Test Error Assessment
 
 ```{r}
-#| label: final_glmnet
+#| label: final_glmnet_assessment
 #| eval: false
-
-# final_glmnet <- read_rds(file = "./models/final_models/final_glmnet.rds")
-# final_glmnet
 
 glmnet_boot_fit <- 
   final_glmnet |> 
@@ -929,9 +929,9 @@ glmnet_boot_fit |>
 
 ```
 
-A very low penalty of $\lambda = 0.00264$ with a mixture of $\alpha = 0.6$ were the best parameters.
+A very low penalty of $\lambda = 0.0085$ with a mixture of $\alpha = 0.15$ were the best parameters.
 
-New fit with new feature engineering, mean RMSE = 0.0637 (1000 Bootstraps). **Kaggle's Top 15%**. Best so far...
+New fit with new feature engineering, mean RMSE = 0.0637 (1000 Bootstraps). **Kaggle's Top 15%**.
 
 #### Elastic-Net Submission
 
@@ -956,13 +956,13 @@ res_elasticnet <-
 
 # .csv for submission
 sub_elasticnet <- data.frame(Id = ames_test$Id, SalePrice = res_elasticnet$SalePrice_pred)
-write.csv(sub_elasticnet, "./data/submissions/jthom_sub_4_elasticnet.csv", quote = FALSE, row.names = FALSE)
+write.csv(sub_elasticnet, "./data/submissions/jthom_sub_5_elasticnet.csv", quote = FALSE, row.names = FALSE)
 
 ```
 
 ### XGBoost Regression
 
-Because of the multicollinearity, xgboost is one of the best candidates for this project.
+Because of the multicollinearity, XGBoost is one of the best candidates for this project.
 
 #### XGBoost Spec & Tuning
 
@@ -972,21 +972,19 @@ Because of the multicollinearity, xgboost is one of the best candidates for this
 
 library(xgboost)
 
-# library(usemodels)
-# usemodels::use_xgboost(SalePrice_bc ~ ., data = ames_train)
-
 xgboost_rec <-
   recipe(formula = SalePrice_bc ~ ., data = ames_train) |>
   update_role(Id, new_role = "Id variable") |>
   update_role(SalePrice, new_role = "original outcome") |>
   update_role(dataset, new_role = "splitting variable") |>
+  step_lencode_glm(MSSubClass, outcome = vars(SalePrice_bc)) |>
   step_dummy(all_nominal_predictors()) |>    
   step_YeoJohnson(all_numeric_predictors()) |>
   step_zv(all_predictors()) |> 
   step_normalize(all_numeric_predictors())  
 
 xgboost_spec <-
-  boost_tree(trees = 1000, 
+  boost_tree(trees = tune(), 
              min_n = tune(), 
              tree_depth = tune(), 
              learn_rate = tune(),
@@ -1000,32 +998,52 @@ xgboost_wf <-
   add_recipe(xgboost_rec) |>
   add_model(xgboost_spec)
 
-set.seed(1982)
-doParallel::registerDoParallel()
+# tic("opt_xgboost")
 
-xgboost_tune <-
-  tune_grid(xgboost_wf, 
-            resamples = ames_folds, 
-            grid = 20)
+# set.seed(1982)
+# doParallel::registerDoParallel()
+
+# xgboost_tune <-
+#   tune_grid(xgboost_wf, 
+#             resamples = ames_folds, 
+#             grid = 60)
+
+# toc()
 
 # Explore Results 
-show_best(xgboost_tune, metric = "rmse")
+# show_best(xgboost_tune, metric = "rmse")
 
-# Main Arguments:
-#   trees = 1000
-#   min_n = 6
-#   tree_depth = 3
-#   learn_rate = 0.016264141166364
-#   loss_reduction = 2.85800562773311e-08
-#   sample_size = 0.673825541965198
+# Best Selection
+#   trees = 1300
+#   min_n = 3
+#   tree_depth = 13
+#   learn_rate = 0.0087033422152885
+#   loss_reduction = 3.4747461708994e-08
+#   sample_size = 0.175630365774268
 
 # Set best parameters
-final_xgboost <- xgboost_wf |>
-  finalize_workflow(select_best(xgboost_tune, metric = "rmse"))
 
+# final_xgboost <- xgboost_wf |>
+#   finalize_workflow(select_best(xgboost_tune, metric = "rmse"))
+
+final_xgboost <- read_rds(file = "./models/final_models/final_xgboost.rds")
 final_xgboost
 
+# write_rds(final_xgboost, file = "./models/final_models/final_xgboost.rds")
+
 # Assessment of test error
+
+
+```
+
+A total of **2.8 hours** for the search of 6 hyperparameters in 60 randomly-generated grids using 100 splits (10-CV folds, repeated 10 times). See the commented code above with the best ones selected (RMSE).
+
+```{r}
+#| label: final_xgboost_assessment
+#| eval: false
+
+# tic("test_xgboost")
+
 xgboost_boot_fit <- 
   final_xgboost |> 
   fit_resamples(resamples = ames_boots)
@@ -1033,11 +1051,14 @@ xgboost_boot_fit <-
 xgboost_boot_fit |>
   collect_metrics(summarize = TRUE)
 
-write_rds(final_xgboost, file = "./models/final_models/final_xgboost.rds")
-
+toc()  
 ```
 
+XGBoost fit: Test Error estimation mean (of 1000 Bootstraps) RMSE = 0.0666.
+
 #### XGBoost Submission
+
+Results **not submitted** given the slightly worse performance than Elasti-Net (above). However, results will be used to build an ensemble (stacking).
 
 ```{r}
 #| label: XGB_submission
@@ -1067,15 +1088,26 @@ write.csv(sub_xgboost, "./data/submissions/jthom_sub_4_xgboost.csv", quote = FAL
 
 ### Mean of Predictions
 
-The simplest ensemble often very effective when the nature of the models are different, like in this case!
-The Elastic-Net regression had a better RMSE than the XGBoost, therefore I can weight it more.
+The simplest ensemble, often very effective when the nature of the models are different like in this case! The Elastic-Net regression had a better RMSE than the XGBoost, therefore I can give more weight to it:
 
 ```{r}
 #| label: stack_1
 #| eval: false
+#| code-fold: false
 
-sub_stack_1 <- (elastic_net_pred + elastic_net_pred + xgboost_pred)/3
+# (elastic_net_pred + elastic_net_pred + xgboost_pred)/3
 
+avg_elnet_xgb <- ((2*res_elasticnet$SalePrice_pred) + res_xgboost$SalePrice_pred)/3
 
+sub_stack_elnet_xgb <- data.frame(Id = ames_test$Id, SalePrice = avg_elnet_xgb)
 
+write.csv(sub_stack_elnet_xgb, "./data/submissions/jthom_sub_5_stack_elnet_xgb.csv", 
+          quote = FALSE, 
+          row.names = FALSE)
 ```
+
+This was a **top 11%** Kaggle submission! Best so far...
+
+***...to be continue...***
+
+J. Thomas
