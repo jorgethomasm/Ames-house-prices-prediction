@@ -67,7 +67,7 @@ find_mode <- function(x) {
 #' @author Jorge Thomas
 #' @param data a data frame with Response (Target) and Predictors (features) columns.
 #' @param target a string with the column name of the Response.
-#' @return an ordered and named list with the calculation of the Mutual Information Criterion
+#' @return a data.frame  ordered with the calculation of the Mutual Information Criterion
 calc_mi_score <- function(data, target) {
 
   mi_list <- vector(mode = "list")
@@ -83,8 +83,13 @@ calc_mi_score <- function(data, target) {
 
   }
 
-  sort(unlist(mi_list, use.names = TRUE), decreasing = TRUE)
+  res_vec <- sort(unlist(mi_list, use.names = TRUE), decreasing = TRUE)
 
+  df_mi <- data.frame(Variable = names(res_vec),
+                      nats = res_vec,
+                      Percent = round(100 * res_vec / res_vec[1], 4))
+  
+  df_mi
 }
 
 

@@ -45,9 +45,9 @@ In this classic Kaggle dataset [@house-prices-advanced-regression-techniques] yo
 
 The Ames House dataset was prepared to improve on the older classic Boston Houses dataset and, given its open competition nature, it comprises two files:
 
-1.  One file contains features and labels or what's the same predictors and responses. Here this is the *training dataset*. It's all I have to split the ***Data Budget***.
+1. One file contains features and labels or what's the same predictors and responses. Here this is the *training dataset*. It's all I have to split the ***Data Budget***.
 
-2.  Another file contains only features (predictors) to make predictions for the final submissions. Here this is the *test dataset*.
+2. Another file contains only features (predictors) to make predictions for the final submissions. Here this is the *test dataset*.
 
 The goal of the competition is to achieve minimum RMSE.
 
@@ -130,11 +130,11 @@ ames_all |>
 
 I'll fill the remaining missing values as follow:
 
--   The `LotFrontage` column refers to the linear feet of street connected to the house. This feature is not well documented and the missing percentage related to other variables makes it not only unreliable, but very low in variance. Therefore, I will delete the feature.
+- The `LotFrontage` column refers to the linear feet of street connected to the house. This feature is not well documented and the missing percentage related to other variables makes it not only unreliable, but very low in variance. Therefore, I will delete the feature.
 
--   Everytime a Garage doesn't exist, i.e., `GarageType = "None"`, there is the corresponding missing value in Garage Year Built `GarageYrBlt = NA`. I will **engineer a new feature** called `GarageNew` with three ordinal categories: None, No, Yes. This based on the delta of `YearBuilt - GarageYrBlt`; I expect that given the house price, the algorithm will learn that "None" is worse than "No" and so on. Then I will remove the `GarageYrBlt` predictor.
+- Everytime a Garage doesn't exist, i.e., `GarageType = "None"`, there is the corresponding missing value in Garage Year Built `GarageYrBlt = NA`. I will **engineer a new feature** called `GarageNew` with three ordinal categories: None, No, Yes. This based on the delta of `YearBuilt - GarageYrBlt`; I expect that given the house price, the algorithm will learn that "None" is worse than "No" and so on. Then I will remove the `GarageYrBlt` predictor.
 
--   For the rest of variables with a 1 % or less missing values `NA`, I'll calculate the **median** (if numerical) and the **mode** (if string) in order to fill them with it.
+- For the rest of variables with a 1 % or less missing values `NA`, I'll calculate the **median** (if numerical) and the **mode** (if string) in order to fill them with it.
 
 Here's my pipeline for the whole dataset:
 
@@ -246,22 +246,33 @@ After 1.5 hours of reading, googling, understanding other notebooks and delibera
 Here's the code that complies with the four previous steps:
 
 ```{r}
-#| label: Feat_Eng
+#| label: Feat-Eng
 
 # --- Total Aggregations ----
 ames_all <- ames_all |>
 
   # Continuous numerical ----
   # NEW TotalInteriorArea
-  mutate(TotalIntArea = BsmtFinSF1 + BsmtFinSF2 + FirstFlrSF + SecondFlrSF) |>
-  select(-c(BsmtFinSF1, BsmtFinSF2))|> # Bye bye...
+  mutate(TotalIntArea = BsmtFinSF1 + BsmtFinSF2 + FirstFlrSF + SecondFlrSF) |>    
 
-  # NEW HouseAge
-  # mutate(HouseAge = YrSold - YearBuilt) |>  # Same as YearBuilt
+  # NEW Interior Areas to lengths (sqrt Feat. Transformation)
+  # mutate(TotalIntLength = sqrt(TotalIntArea)) |>
+  # mutate(BsmtFinF1 = sqrt(BsmtFinSF1)) |>
+  # mutate(BsmtFinF2 = sqrt(BsmtFinSF2)) |>
+  # mutate(FirstFlrF = sqrt(FirstFlrSF)) |>
+  # mutate(SecondFlrF = sqrt(SecondFlrSF)) |> 
+
+  select(-c(BsmtFinSF1, BsmtFinSF2)) |> # Bye bye...
 
   # NEW TotalExteriorArea
-  mutate(TotalExtArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + threessnporch + ScreenPorch) |>
+  mutate(TotalExtArea = WoodDeckSF + OpenPorchSF + EnclosedPorch + threessnporch + ScreenPorch + GarageArea) |>
   select(-c(WoodDeckSF, OpenPorchSF, EnclosedPorch, threessnporch, ScreenPorch)) |> # Bye bye...
+ 
+  # NEW Exterior Areas to lengths (sqrt Feat. Transformation)
+  # mutate(TotalExtLength = sqrt(TotalExtArea)) |>
+
+  # NEW GarageLength
+  # mutate(GarageLength = sqrt(GarageArea)) |>
 
   # Counting numerical ----
   # NEW TotalBaths
@@ -314,18 +325,20 @@ ames_all <- ames_all |>
   mutate(CentralAir = fct_relevel(CentralAir, "No", "Yes"))|>
 
   # NEW IsRemodelled (it will replace YearRemodAdd)
-  mutate(IsRemodelled = if_else(YearRemodAdd - YearBuilt > 0, "Yes", "No")) |>
-  mutate(IsRemodelled = factor(IsRemodelled, levels = c("No", "Yes"))) |>
-  select(-YearRemodAdd) |> # Bye YearRemodAdd
+  # mutate(IsRemodelled = if_else(YearRemodAdd - YearBuilt > 0, "Yes", "No")) |>
+  # mutate(IsRemodelled = factor(IsRemodelled, levels = c("No", "Yes"))) |>
+  # select(-YearRemodAdd) |> # Bye YearRemodAdd
+  # Not important
 
   # NEW ExistPool  
-  # mutate(ExistPool = if_else(PoolArea == 0, "No", "Yes")) |>
-  # mutate(ExistPool = fct_relevel(ExistPool, "No", "Yes"))|>
-  # a dummy of PoolQC will make this Feat. redundant!
+  mutate(ExistPool = if_else(PoolArea == 0, "No", "Yes")) |>
+  mutate(ExistPool = fct_relevel(ExistPool, "No", "Yes"))|>
+  # a dummy of PoolQC makes this Feat. Redundant, BUT PoolQC has no Information! (Eliminated)
 
   # NEW ExistGarage
   mutate(ExistGarage = if_else(GarageArea == 0, "No", "Yes")) |>
   mutate(ExistGarage = fct_relevel(ExistGarage, "No", "Yes"))|>
+  select(-c(GarageArea)) |> # Bye
 
   # NEW ExistBsmt
   mutate(ExistBsmt = if_else(TotalBsmtSF == 0, "No", "Yes")) |>
@@ -348,9 +361,11 @@ ames_all <- ames_all |>
   # New ratios
   mutate(LivLotRatio = GrLivArea/LotArea) |>
   mutate(Spaciousness = (FirstFlrSF + SecondFlrSF) / TotRmsAbvGrd) |>
+  # select(-c(FirstFlrSF)) |>
 
   # New interactions (by me!)
   mutate(OverallQuCoInt = as.numeric(OverallQual) * as.numeric(OverallCond))
+  
  
 
 # ---- Unordered factors ----
@@ -388,9 +403,7 @@ ames_all$LowQualFinSF <- NULL
 ames_all$PoolArea <- NULL
 ```
 
-Note that I replaced `YearRemodAdd` to a simpler binary `IsRemodelled` variable, similar to what I did with the new `GarageNew` column.
-
-`MSSubClass` has too many categories, therefore I will perform **target enconding** in the *recipe* as a step.
+Column `MSSubClass` has too many categories, therefore I will perform **target enconding** in the *recipe* as a step.
 
 ### Recheck mutual info
 
@@ -407,8 +420,24 @@ mi_y_X_2 <- ames_all |>
 
 mi_y_X_2 |> 
   head(20) |>
-  knitr::kable(caption = "Mutual Info")
+  knitr::kable(caption = "Mutual Information")
 ```
+
+#### Drop no info columns
+
+```{r}
+#| label: noinfo_drop
+#| code-fold: false
+
+# < 0.06444 == < 2.4%
+
+noinfo_cols <- mi_y_X_2$Variable[which(mi_y_X_2$Percent < 2.4)]
+
+ames_all <-
+  ames_all |>
+  select(-all_of(noinfo_cols)) 
+```
+
 
 ### Searching for simple correlations
 
@@ -431,7 +460,6 @@ ames_all |>
   cor(method = "pearson") |>
   corrplot(type = "lower", method = "circle", insig = 'blank', order = "hclust", diag = TRUE,
   tl.col="black", tl.cex = 0.8, addCoef.col = 'black', number.cex = 0.6)
-
 ```
 
 According to the matrix above, `GrLivArea` has the strongest linear relationship with the target `SalePrice`, followed by `TotalIntArea`, this given the collinearity with `GrLivArea`, and then `GarageArea` or `GarageCars`, both heavily correlated too, like commented before.
@@ -454,12 +482,9 @@ ames_all |>
   cor(method = "pearson") |>
   corrplot(type = "lower", order="hclust", diag = TRUE, insig = 'blank',
   tl.col="black", tl.cex = 0.8, number.cex = 0.6)
-
 ```
 
 The best linear association with `SalePrice` is given by `OverallQual` factor, followed by everything else that has to do with *quality* ratings.
-
-Here, the highest collinearity is showed between `PoolQC` and the new `ExistPool` variables. This is because they share a majority ammount of "None" and "No" values respectively in the exact same positions, therefore making the information redundant. In case of performing one-hot encoding there would be two repeated columns.
 
 Overall, one can see clearly the **multicollinearity** clusters, which suggest the use of advanced **Feature Selection** techniques.
 
@@ -488,7 +513,7 @@ ames_all |>
   labs(x = expression("Ground Living Area ["~ft^2~"]"), 
        y = "Sale\nPrice\n['000 $]") +  
   geom_point(aes(color = OverallQual), alpha = 0.5) + theme(axis.text.y = element_blank()) +
-  geom_smooth(method = "lm", formula =  y ~ splines::bs(x, 3), color = "black", size = 1.5, alpha = 0.5) +
+  geom_smooth(method = "lm", formula =  y ~ splines::bs(x, 3), color = "black", linewidth = 1.5, alpha = 0.5) +
   theme(legend.position = "bottom")
 
 # install.packages("hexbin")
@@ -513,7 +538,7 @@ On the other hand, note how **problematic are the outliers** with the spline fit
 
 ames_all |>
   filter(dataset == "train") |>
-  select(c(SalePrice, GrLivArea, OverallQual, YrSold)) |>
+  select(c(SalePrice, GrLivArea, OverallQual)) |>
   filter(GrLivArea > 4500) |>
   glimpse()
 
@@ -756,19 +781,6 @@ ames_all |>
 
 One of the motivations to develop this project is because I'm switching to the **Tidymodels** framework. Therefore, it's time to load the library to train a simple reference model.
 
-## Drop no info columns
-
-```{r}
-#| label: noinfo_drop
-#| code-fold: false
-
-noinfo_cols <- names(which(mi_y_X_2 < 0.06444))
-
-ames_all <-
-  ames_all |>
-  select(-all_of(noinfo_cols)) 
-```
-
 ## Resampling for Test Error Estimation
 
 This is a critical step for final model selection. Depending on the chosen resample technique to estimate the Goodness-of-Prediction or test error, in this case metrics like RMSE can be slightly optimistic or conservative. Take a look at the pristine explanation by [@resamplingML].
@@ -781,7 +793,7 @@ By today's standards this dataset is small, therefore I will choose Bootstraping
 
 I will generate 1000 bootstrap-samples.
 
-[I will use 10-folds CV reapeated 10 times (100 splits) for the hyperparameter tuning of more complex algoritms. Once optimised, I'll assess the test error again with the 1000 bootstraps, for the sake of comparison.]{.column-margin}
+[I will use 10-folds CV reapeated 10 times (100 splits) for the hyperparameter tuning of more complex algorithms. Once optimised, I'll assess the test error again with the 1000 bootstraps, for the sake of comparison.]{.column-margin}
 
 ## Expending the data budget
 
@@ -824,7 +836,7 @@ The following code shows the preprocessing steps enclosed in a pipeline or ***re
 #| fig-cap: "Sample of skewed numerical predictors that contain zero as value."
 
 ames_train |>  
-  select(c(GrLivArea, TotBaths, GarageArea, TotalBsmtSF, YearBuilt, SecondFlrSF)) |> 
+  select(c(GrLivArea, TotBaths, TotalExtArea, TotalBsmtSF, YearBuilt, SecondFlrSF)) |> 
   pivot_longer(GrLivArea:SecondFlrSF) |>
   ggplot(aes(x = value)) +  
   geom_histogram(bins = 50, color = "lightgrey", fill = "lightgrey") +  
@@ -852,6 +864,7 @@ I'll choose Elastic Net regression, combining the best of Lasso and Ridge. I mus
 
 ```{r}
 #| label: Elastic-net-setup
+#| eval: false
 
 library(embed)
 
@@ -887,31 +900,32 @@ glmnet_wf <-
 
 # penalty_ <- 10^seq(-4, -1, length.out = 20)
 # mixture_ = c(0.05, 0.2, 0.4, 0.6, 0.8, 1)
-penalty_ <- 10^seq(-3, -2, length.out = 30)
+penalty_ <- 10^seq(-3, -2, length.out = 40)
 mixture_ <- c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6)
 
 glmnet_grid <- tidyr::crossing(penalty = penalty_, 
                                mixture = mixture_)
 
 # Tune with Folds
-# set.seed(1982)
-# doParallel::registerDoParallel()
 
-# glmnet_tune <- tune_grid(glmnet_wf, 
-#                          resamples = ames_folds,  # CV is faster!
-#                          grid = glmnet_grid)
+tic("opt-ElasticNet")
+set.seed(1982)
+doParallel::registerDoParallel()
+
+glmnet_tune <- tune_grid(glmnet_wf, 
+                         resamples = ames_folds,  # CV is faster!
+                         grid = glmnet_grid)
+
+toc()
 
 # Explore Results 
-# show_best(glmnet_tune, metric = "rmse")
+show_best(glmnet_tune, metric = "rmse")
 
 # Set best parameters
-# final_glmnet <- glmnet_wf |> finalize_workflow(select_best(glmnet_tune, metric = "rmse"))
-
-final_glmnet <- read_rds(file = "./models/final_models/final_glmnet.rds")
+final_glmnet <- glmnet_wf |> finalize_workflow(select_best(glmnet_tune, metric = "rmse"))
 final_glmnet
 
-# write_rds(final_glmnet, file = "./models/final_models/final_glmnet.rds")
-
+write_rds(final_glmnet, file = "./models/final_models/final_glmnet.rds")
 ```
 
 ### Elastic-Net Test Error Assessment
@@ -920,18 +934,28 @@ final_glmnet
 #| label: final_glmnet_assessment
 #| eval: false
 
+tic("elastic-net fit bootstaps")
 glmnet_boot_fit <- 
   final_glmnet |> 
   fit_resamples(resamples = ames_boots)
   
 glmnet_boot_fit |>
   collect_metrics(summarize = TRUE)
+toc()
+```
+
+```{r}
+#| label: load_elnet_model
+
+final_glmnet <- read_rds(file = "./models/final_models/final_glmnet.rds")
+final_glmnet
 
 ```
 
-A very low penalty of $\lambda = 0.0085$ with a mixture of $\alpha = 0.15$ were the best parameters.
 
-New fit with new feature engineering, mean RMSE = 0.0637 (1000 Bootstraps). **Kaggle's Top 15%**.
+A very low penalty of $\lambda = 0.0008$ with a mixture of $\alpha = 0.15$ were the best parameters.
+
+New fit with new feature engineering, mean RMSE = 0.0636 (1000 Bootstraps). **Kaggle's Top 15%**.
 
 #### Elastic-Net Submission
 
